@@ -1,6 +1,6 @@
 /**
 *	Chebyshev filter implimentation
-*	version 2004-09-02
+*	version 2004-08-07
 *   
 *   Copyright 2004 Reid A. Woodbury Jr.
 *	
