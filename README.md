@@ -1,3 +1,6 @@
+MAX/MSP Plug-ins
+================
+
 cheb.c
 ------
 An implementation of a Chebyshev recursive filter for MAX/MSP.
