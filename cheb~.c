@@ -2,7 +2,7 @@
 *	Chebyshev filter implimentation
 *	version 2004-09-02
 *   
-*   Copyright 2008 Reid A. Woodbury Jr.
+*   Copyright 2004 Reid A. Woodbury Jr.
 *	
 *	Part of this code was adapted from
 *       "The Scientist and Engineer's Guide to Digital Signal Processing" 2nd edition
