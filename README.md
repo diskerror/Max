@@ -15,4 +15,4 @@ This will do a IIR or recursive filter based on an input list of coefficients. T
 
 cheb.c
 ------
-Code extracted from “cheb~.c” and only generates a list of coefficients that can then be sent to an “iir~” object.
+Code extracted from “cheb~.c” and only generates a list of coefficients that can then be sent to an “iir~” object. It's also interesting to watch how the coefficients change with cuttoff frequency and ripple settings.
