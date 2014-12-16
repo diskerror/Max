@@ -1,6 +1,5 @@
 /**
 *	Chebyshev coefficient generator
-*	version 2004-08-11
 *   
 *   Copyright 2004 Reid A. Woodbury Jr.
 *	
@@ -22,14 +21,14 @@
 *   limitations under the License.
 */
 
-#include "ext.h"  		// you must include this - it contains the external object's link to available Max functions
-#include "z_dsp.h"
+#include "ext.h"				// standard Max include, always required
+#include "ext_obex.h"			// required for new style Max object
+#include "z_dsp.h"				//	for sys_getsr(), t_double, t_float, t_vptr
 #include "ext_strings.h"
 
 #include <math.h>
 
 #ifndef	pi
-//#define	pi		3.14159265358979323846d
 #define	pi		3.1415926535897932384626433
 #endif
 
@@ -38,167 +37,165 @@
 //	double	TT	= T * T;
 #define	TT		1.1937856416380991930736854556016623973846
 
-struct t_chebCoef	// defines our object's internal variables for each instance in a patch
+#define MAX_CHEB_POLES	20
+
+typedef struct _cheb
 {
-	t_object p_ob;		// object header - ALL objects MUST begin with this...
-	double	omegah;
-	char	lowHIGH;
-	char	poles;
-	double	piPoles;
-	double	piPoles2;
-	float	ripple;
-	double	sinhVXoKX;
-	double	coshVXoKX;
-	double	*a;
-	double	*b;
-	char	outOrder;		//	0 = abab, 1 = aabb
-	void	*outlet;		//	list outlet
-};
-typedef struct t_chebCoef t_chebCoef;
+	t_object	p_ob;		// object header - ALL objects MUST begin with this...
+	t_double	omegah;
+	t_uint8		lowHIGH;
+	t_uint8		poles;
+	t_double	piPoles;
+	t_double	piPoles2;
+	t_double	ripple;
+	t_double	sinhVXoKX;
+	t_double	coshVXoKX;
+	t_double	*a;
+	t_double	*b;
+	t_uint8		outOrder;	//	0 = abab, 1 = aabb
+	t_vptr		outlet;		//	list outlet
+} t_cheb;
 
-void *chebCoef_class;		// global pointer to the object class - so max can reference the object 
+void *cheb_class;
 
-// these are prototypes for the methods that are defined below
-void *chebCoef_new	(t_symbol *s, long p, float r, t_symbol *o);
-void chebCoef_free	(t_chebCoef *x);
-void chebCoef_assist(t_chebCoef *x, void *b, long m, long a, char *s);
-void chebCoef_bang	(t_chebCoef *x);
-void chebCoef_low	(t_chebCoef *x);
-void chebCoef_high	(t_chebCoef *x);
-void chebCoef_aabab	(t_chebCoef *x);
-void chebCoef_aaabb	(t_chebCoef *x);
-void chebCoef_print	(t_chebCoef *x);
-void chebCoef_cutoff(t_chebCoef *x, float c);
-void chebCoef_cutoffInt(t_chebCoef *x, long l);
-void chebCoef_ripple(t_chebCoef *x, float r);
-void chebCoef_poles	(t_chebCoef *x, long p);
+//// standard set
+void *cheb_new(t_symbol *s, long argc, t_atom *argv);
+void cheb_free(t_cheb *x);
+void cheb_assist(t_cheb *x, void *b, long m, long a, char *s);
 
-void chebCoef_rippleCalc	(t_chebCoef *x);
-void chebCoef_calculate		(t_chebCoef *x);
-void chebCoef_getPointers	(t_chebCoef *x);
-void chebCoef_releasePtrs	(t_chebCoef *x);
+void cheb_bang(t_cheb *x);
+void cheb_low(t_cheb *x);
+void cheb_high(t_cheb *x);
+void cheb_aabab(t_cheb *x);
+void cheb_aaabb(t_cheb *x);
+void cheb_print(t_cheb *x);
+void cheb_cutoff(t_cheb *x, double c);
+void cheb_cutoffInt(t_cheb *x, long l);
+void cheb_poles(t_cheb *x, long p);
+void cheb_ripple(t_cheb *x, double r);
+
+void cheb_rippleCalc(t_cheb *x);
+void cheb_calculate(t_cheb *x);
+void cheb_getPointers(t_cheb *x);
+void cheb_releasePtrs(t_cheb *x);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-void main(void)
-{
-	setup((t_messlist **)&chebCoef_class, (method)chebCoef_new, (method)chebCoef_free, (short)sizeof(t_chebCoef), 0L,
-															A_DEFSYM, A_DEFLONG, A_DEFFLOAT, A_DEFSYM, 0);
+int C74_EXPORT main(void)
+{	
+	t_class *c;
 	
-	addmess((method)chebCoef_assist, "assist", A_CANT, 0);
-	addbang((method)chebCoef_bang);
-	addmess((method)chebCoef_low, "low", 0);
-	addmess((method)chebCoef_high, "high", 0);
-	addmess((method)chebCoef_print, "print", 0);
-	addmess((method)chebCoef_aabab, "aabab", 0);
-	addmess((method)chebCoef_aaabb, "aaabb", 0);
-	addfloat((method)chebCoef_cutoff);		// the method for a float in the left inlet (inlet 0)
-	addint((method)chebCoef_cutoffInt);
-	addinx((method)chebCoef_poles, 1);
-	addftx((method)chebCoef_ripple, 2);
+	c = class_new("cheb", (method)cheb_new, (method)cheb_free, (long)sizeof(t_cheb), 0L, A_DEFSYM, A_DEFLONG, A_DEFFLOAT, A_DEFSYM, 0);
+    class_addmethod(c, (method)cheb_assist, "assist",	A_CANT, 0);  
 	
-	post("cheb object loaded...",0);
+    class_addmethod(c, (method)cheb_bang, "bang", 0);
+    class_addmethod(c, (method)cheb_low, "low", 0);
+    class_addmethod(c, (method)cheb_high, "high", 0);
+    class_addmethod(c, (method)cheb_print, "print", 0);
+    class_addmethod(c, (method)cheb_aabab, "aabab", 0);
+    class_addmethod(c, (method)cheb_aaabb, "aaabb", 0);
+    class_addmethod(c, (method)cheb_cutoff, "float", A_FLOAT, 0);	// the method for a float in the left inlet (inlet 0)
+    class_addmethod(c, (method)cheb_cutoffInt, "int", A_LONG, 0); 	// the method for a integer in the left inlet (inlet 0)
+    class_addmethod(c, (method)cheb_poles, "in1", A_DEFLONG, 0);
+    class_addmethod(c, (method)cheb_ripple, "ft2", A_DEFFLOAT, 0);  
+	
+	class_register(CLASS_BOX, c);
+	cheb_class = c;
+
+//	post("cheb object loaded...",0);
+	return 0;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-void *chebCoef_new(t_symbol *s, long p, float r, t_symbol *o)
+//	cheb_new(t_symbol *s, long p, float r, t_symbol *o)
+void *cheb_new(t_symbol *s, long argc, t_atom *argv)
 {
-	t_chebCoef *x;				// local variable (pointer to a t_chebCoef data structure)
-	x = (t_chebCoef *)newobject(chebCoef_class); // create a new instance of this object
+	long p;
+	t_float r;
 	
-	//	create list outlet
-	x->outlet	= listout(x);
+	t_cheb *x = NULL;
+    
+	if ( (x = (t_cheb *)object_alloc(cheb_class)) )
+    {
+		//	create other inlets, HIGHEST TO LOWEST or RIGHT TO LEFT
+		floatin(x, 2);	//	ripple
+		intin(x, 1);	//	poles
 	
-	//	create other inlets, HIGHEST TO LOWEST or RIGHT TO LEFT
-	floatin(x,2);	//	ripple
-	intin(x,1);		//	poles
+		//	create list outlet
+		x->outlet = listout(x);
 	
-    //	post message
-	post("cheb [low|high] [#poles] [(float)%%ripple] [aabab|aaabb]");
+		//	post message
+		post("cheb [low|high] [#poles] [(float)%%ripple] [aabab|aaabb]");
 	
-	////////////////////	impose limits	///////////////////////////////
-	//	high or low pass
-	if ( strcmp(s->s_name, "low") && strcmp(s->s_name, "high") && s->s_name[0] )	//	zero means match
-	{
-		post("WARNING: Must specify either \"high\" or \"low\" pass.");
-		post("   Setting value to \"low\".");
-		x->lowHIGH = 0;
-	}
-	else
-	{
-		if (!strcmp(s->s_name, "low") || s->s_name[0] == 0 )
-			x->lowHIGH = 0;
-		else
+		////////////////////	impose limits	///////////////////////////////
+		//	high or low pass
+		if( argc && !strcmp(atom_getsym(argv)->s_name, "high") )
 			x->lowHIGH = 1;
-	}
-	
-	//	number of poles
-	p = p==0 ? 2 : p;	//	default of zero is always changed to 2, then won't be considered an error
-	if ( p<2 || p>20 || p%2>0 )
-	{
-		post("WARNING: Number of poles must be even and between 2 and 20, inclusive.");
-		post("   Setting number of poles to 2.");
-		p=2;
-	}
-	x->poles	= p;
-	x->piPoles	= pi/p;
-	x->piPoles2	= pi/(p*2.0);
-	
-	//	percentage ripple
-	if ( r > 29.0 || r < 0.0 )
-	{
-		post("WARNING: Ripple value must be even and between 0 and 29%.");
-		post("   Setting ripple percentage to zero (Butterworth).");
-		r = 0.0;
-	}
-	x->ripple	= r;
-	chebCoef_rippleCalc(x);
-	
-	//	output order
-	if ( strcmp(o->s_name, "aabab") && strcmp(o->s_name, "aaabb") && o->s_name[0] )	//	zero means match
-	{
-		post("WARNING: Must specify an output order of either \"aabab\" or \"aaabb\".");
-		post("   Setting value to \"aabab\".");
-		x->outOrder = 0;
-	}
-	else
-	{
-		if (!strcmp(o->s_name, "abab") || !o->s_name[0] )
-			x->outOrder = 0;
 		else
+			x->lowHIGH = 0;
+		
+		//	number of poles
+		x->poles = 2;
+		if( argc > 1 ) 
+		{
+			p = atom_getlong(argv+1);
+			
+			//	floor() to the lower even number (ignore last bit)
+			x->poles = ( p > MAX_CHEB_POLES ? MAX_CHEB_POLES : (p < 0 ? 0 : p ) ) & 0xFFFFFFFE;
+		}
+		x->piPoles	= pi/x->poles;
+		x->piPoles2	= pi/(x->poles*2.0);
+	
+		//	start with result pointers == zero
+		x->a = x->b = 0L;
+	
+		//	set up space for results; this depends on the number of poles
+		cheb_getPointers(x);
+	
+		//	percentage ripple
+		x->ripple = 0.0;
+		if( argc > 2 ) 
+		{
+            r = atom_getfloat(argv+2);
+			if ( r > 0.0 && r <= 29.0 )
+			{
+				x->ripple = r;
+			}
+		}
+		cheb_rippleCalc(x);
+	
+		//	output order
+		if( argc > 3 && !strcmp(atom_getsym(argv+3)->s_name, "aaabb") )
 			x->outOrder = 1;
+		else
+			x->outOrder = 0;
+	
+		//	set default values
+		x->omegah		= 0.03926990816987241;	//	aprox 1100Hz at 44.1kHz
+	
+		cheb_calculate(x);
 	}
-	
-	//	start with result pointers == zero
-	x->a = 0L; x->b = 0L;
-	
-	//	set up space for results; this depends on the number of poles
-	chebCoef_getPointers(x);
-	
-	//	set default values
-	x->omegah		= 0.03926990816987241d;	//	aprox 1100Hz at 44.1kHz
-	
-	return(x);					// return a reference to the object instance 
+	return x;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-void chebCoef_free(t_chebCoef *x)
+void cheb_free(t_cheb *x)
 {
-	chebCoef_releasePtrs(x);
+	cheb_releasePtrs(x);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-void chebCoef_assist(t_chebCoef *, void *, long m, long a, char *s) // arguments are always the same for assistance method
+void cheb_assist(t_cheb *x, void *b, long m, long a, char *s)
 {
 	if (m == ASSIST_OUTLET)
 	{
-		sprintf(s,"Coefficient output.");
+		sprintf(s,"Coefficient output (list).");
 	}
 	else
 	{
 		switch (a)
 		{	
 			case 0:
-			sprintf(s,"Cutoff Frequency");
+			sprintf(s,"Cutoff Frequency (Hz)");
 			break;
 			
 			case 1:
@@ -206,7 +203,7 @@ void chebCoef_assist(t_chebCoef *, void *, long m, long a, char *s) // arguments
 			break;
 			
 			case 2:
-			sprintf(s,"Percentage ripple (0-29)");
+			sprintf(s,"Percentage ripple (0-29%%)");
 			break;
 		}
 	}
@@ -214,55 +211,84 @@ void chebCoef_assist(t_chebCoef *, void *, long m, long a, char *s) // arguments
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-void chebCoef_bang(t_chebCoef *x)		// x = reference to this instance of the object
+void cheb_bang(t_cheb *x)		// x = reference to this instance of the object
 {
-	chebCoef_calculate(x);
+	long 	p;
+	t_atom	*list;
+	
+	//	send to outputs
+	list	= (t_atom *) getbytes((x->poles*2+1) * sizeof(t_atom));
+	atom_setfloat(list, x->a[0]);
+	if (x->outOrder)
+	{
+		for (p=1; p<=x->poles; p++)
+		{
+			atom_setfloat(list+(p), x->a[p]);
+			atom_setfloat(list+(x->poles+p), x->b[p]);
+		}
+	}
+	else
+	{
+		for (p=1; p<=x->poles; p++)
+		{
+			atom_setfloat(list+(2*p-1), x->a[p]);
+			atom_setfloat(list+(2*p), x->b[p]);
+		}
+	}
+	
+	outlet_list(x->outlet, 0L, x->poles*2+1, list);
+	
+	freebytes(list, (x->poles*2+1) * sizeof(t_atom));
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-void chebCoef_low(t_chebCoef *x)
+void cheb_low(t_cheb *x)
 {
 	x->lowHIGH = 0;
-	chebCoef_calculate(x);
+	cheb_calculate(x);
+	cheb_bang(x);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-void chebCoef_high(t_chebCoef *x)
+void cheb_high(t_cheb *x)
 {
 	x->lowHIGH = 1;
-	chebCoef_calculate(x);
+	cheb_calculate(x);
+	cheb_bang(x);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-void chebCoef_aabab(t_chebCoef *x)
+void cheb_aabab(t_cheb *x)
 {
 	x->outOrder = 0;
+	cheb_bang(x);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-void chebCoef_aaabb(t_chebCoef *x)
+void cheb_aaabb(t_cheb *x)
 {
 	x->outOrder = 1;
+	cheb_bang(x);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-void chebCoef_print(t_chebCoef *x)
+void cheb_print(t_cheb *x)
 {
 	long i;
-	post("Fc = % .4f,  # poles = %d,  %% ripple = % .2f", x->omegah/pi, x->poles, x->ripple);
+	post("Fc = % .4f,  # poles = %d,  %% ripple = %.2f", x->omegah/pi, x->poles, x->ripple);
 	post("a[00] = % .15e", x->a[0]);
 	for ( i=1; i <= x->poles; i++ )
 		post("a[%02d] = % .15e   b[%02d] = % .15e", i, x->a[i], i, x->b[i]);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-void chebCoef_cutoffInt(t_chebCoef *x, long l)
+void cheb_cutoffInt(t_cheb *x, long l)
 {
-	chebCoef_cutoff(x, (double)l);
+	cheb_cutoff(x, (float)l);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-void chebCoef_cutoff(t_chebCoef *x, float c)
+void cheb_cutoff(t_cheb *x, double c)
 {
 	//	change to fraction of the sample rate
 	c	/=	sys_getsr();
@@ -270,41 +296,43 @@ void chebCoef_cutoff(t_chebCoef *x, float c)
 	//	check the range and mulitply by pi (not 2¹); omegah contains true omega/2 (omega-half)
 	x->omegah	= ( c > 0.5 ? 0.5 : (c < 0.0 ? 0.0 : c) ) * pi;
 	
-	//post("Fc = %g, LH = %d", x->omegah/pi, x->lowHIGH);
+// 	post("Fc = %g, LH = %d", x->omegah/pi, x->lowHIGH);
 	
-	chebCoef_calculate(x);
+	cheb_calculate(x);
+	cheb_bang(x);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-void chebCoef_ripple(t_chebCoef *x, float r)
+void cheb_ripple(t_cheb *x, double r)
 {
-	x->ripple	= r > 29.0 ? 29.0 : (r < 0.0 ? 0.0 : r );
+	x->ripple = (r>29.0) ? 29.0 : ((r<0.0) ? 0.0 : r);
 	
-	chebCoef_rippleCalc(x);
+	cheb_rippleCalc(x);
+	cheb_calculate(x);
+	cheb_bang(x);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-void chebCoef_poles(t_chebCoef *x, long p)
+void cheb_poles(t_cheb *x, long p)
 {
-	p	= p > 20 ? 20 : (p < 0 ? 0 : p );
-#pragma optimization_level 0
-	p /= 2;
-	p *= 2;
-#pragma optimization_level reset
+	p = ( (p > MAX_CHEB_POLES) ? MAX_CHEB_POLES : ((p < 0) ? 0 : p ) ) & 0xFFFFFFFE;
 	
-	chebCoef_releasePtrs	(x);	//	number of a and b values may have changed
-	
+	cheb_releasePtrs(x);	//	count of a and b values may change
+
 	x->poles	= p;
-	x->piPoles	= PI/p;
-	x->piPoles2	= PI/(p*2.0);
+	x->piPoles	= pi/p;
+	x->piPoles2	= pi/(p*2.0);
 	
-	chebCoef_rippleCalc(x);
-	chebCoef_getPointers	(x);
+	cheb_getPointers	(x);
+	
+	cheb_rippleCalc(x);
+	cheb_calculate(x);
+	cheb_bang(x);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-void chebCoef_rippleCalc(t_chebCoef *x)
+void cheb_rippleCalc(t_cheb *x)
 {
 	double	ESinv, VX, KX;
 	
@@ -323,11 +351,11 @@ void chebCoef_rippleCalc(t_chebCoef *x)
 		x->coshVXoKX	= 0.0;
 	}
 	
-	//post("ES = %g, VX = %g, KX = %g", 1/ESinv, VX, KX);
+// 	post("ES = %g, VX = %g, KX = %g", 1/ESinv, VX, KX);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-void chebCoef_calculate(t_chebCoef *x)
+void cheb_calculate(t_cheb *x)
 {
 	// holds the "a" & "b" coefficients upon program completion
 	//double	a[numCoeffs], b[numCoeffs];
@@ -335,8 +363,6 @@ void chebCoef_calculate(t_chebCoef *x)
 	//double	ta[numCoeffs], tb[numCoeffs];
 	double	*ta	= (double *)getbytes((x->poles+3) * sizeof(double));
 	double	*tb	= (double *)getbytes((x->poles+3) * sizeof(double));
-	
-	t_atom	*list;
 	
 	double	K, KK;
 	double	RP, IP, M, D, X0, X1, X2, Y1, Y2;
@@ -364,7 +390,7 @@ void chebCoef_calculate(t_chebCoef *x)
 	// LOOP FOR EACH POLE-PAIR
 	for ( p=1; p <= x->poles/2; p++ )
 	{
-		// chebCoef_calculate the pole location on the unit circle
+		// cheb_calculate the pole location on the unit circle
 		RP = -cos(x->piPoles2 + (p-1) * x->piPoles);
 		IP =  sin(x->piPoles2 + (p-1) * x->piPoles);
 		
@@ -375,7 +401,7 @@ void chebCoef_calculate(t_chebCoef *x)
 			IP *= x->coshVXoKX;
 		}
 		
-		//post("%d  RP = %g, IP = %g", p, RP, IP);
+// 		post("%d  RP = %g, IP = %g", p, RP, IP);
 		
 		// s-domain to z-domain conversion
 		M	= RP*RP + IP*IP;
@@ -386,7 +412,7 @@ void chebCoef_calculate(t_chebCoef *x)
 		Y1	= (8.0 - 2.0*M*TT)/D;
 		Y2	= (-4.0 - 4.0*RP*T - M*TT)/D;
 		
-		//post("%d  w = %g, M = %g, D = %g, X0 = %g, X1 = %g, X2 = %g, Y1 = %g, Y2 = %g", p, x->omegah*2, M, D, X0, X1, X2, Y1, Y2);
+// 		post("%d  w = %g, M = %g, D = %g, X0 = %g, X1 = %g, X2 = %g, Y1 = %g, Y2 = %g", p, x->omegah*2, M, D, X0, X1, X2, Y1, Y2);
 		
 		D = 1 + Y1*K - Y2*KK;
 		
@@ -402,7 +428,7 @@ void chebCoef_calculate(t_chebCoef *x)
 			B1 = -B1;
 		}
 		
-		//post("%d  A0 = %g, A1 = %g, A2 = %g, B1 = %g, B2 = %g", p, A0, A1, A2, B1, B2);
+// 		post("%d  A0 = %g, A1 = %g, A2 = %g, B1 = %g, B2 = %g", p, A0, A1, A2, B1, B2);
 		
 		// Add coefficients to the cascade
 		for ( i=0; i < x->poles+3; i++ )
@@ -448,36 +474,11 @@ void chebCoef_calculate(t_chebCoef *x)
 	
 	for ( i=0; i<x->poles+1; i++ )
 		x->a[i] /= gain;
-	
-	
-	//	send to outputs
-	list	= (t_atom *)getbytes((x->poles*2+1) * sizeof(t_atom));
-	SETFLOAT(list, x->a[0]);
-	if (x->outOrder)
-	{
-		for (p=1; p<=x->poles; p++)
-		{
-			SETFLOAT(list+(p), x->a[p]);
-			SETFLOAT(list+(x->poles+p), x->b[p]);
-		}
-	}
-	else
-	{
-		for (p=1; p<=x->poles; p++)
-		{
-			SETFLOAT(list+(2*p-1), x->a[p]);
-			SETFLOAT(list+(2*p), x->b[p]);
-		}
-	}
-	
-	outlet_list(x->outlet, 0L, x->poles*2+1, list);
-	
-	freebytes(list, (x->poles*2+1) * sizeof(t_atom));
 }
 
 ///////////////////////////////////////////////
 //	get and free memory functions
-void chebCoef_getPointers	(t_chebCoef *x)
+void cheb_getPointers	(t_cheb *x)
 {
 	if (!x->a && !x->b)	//	all must be zero
 	{
@@ -485,18 +486,18 @@ void chebCoef_getPointers	(t_chebCoef *x)
 		x->b	= (double *)getbytes((x->poles+3) * sizeof(double));
 	}
 	else
-		error("chebCoef_getPointers; one pointer was not zero.");
+		error("cheb_getPointers; one pointer was not zero.");
 }
 
-void chebCoef_releasePtrs	(t_chebCoef *x)
+void cheb_releasePtrs	(t_cheb *x)
 {
 	if (x->a && x->b)	//	all must != zero
 	{
 		freebytes(x->a, (x->poles+3) * sizeof(double));
 		freebytes(x->b, (x->poles+3) * sizeof(double));
 		
-		x->a = 0L; x->b = 0L;;
+		x->a = x->b = 0L;
 	}
 	else
-		error("chebCoef_releasePtrs; one pointer was already zero.");
+		error("cheb_releasePtrs; one pointer was already zero.");
 }
