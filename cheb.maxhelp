@@ -38,13 +38,39 @@
 		"subpatcher_template" : "",
 		"boxes" : [ 			{
 				"box" : 				{
+					"id" : "obj-19",
+					"maxclass" : "message",
+					"numinlets" : 2,
+					"numoutlets" : 1,
+					"outlettype" : [ "" ],
+					"patching_rect" : [ 212.0, 162.5, 44.0, 22.0 ],
+					"style" : "",
+					"text" : "aaabb"
+				}
+
+			}
+, 			{
+				"box" : 				{
+					"id" : "obj-17",
+					"maxclass" : "message",
+					"numinlets" : 2,
+					"numoutlets" : 1,
+					"outlettype" : [ "" ],
+					"patching_rect" : [ 212.0, 132.5, 44.0, 22.0 ],
+					"style" : "",
+					"text" : "aabab"
+				}
+
+			}
+, 			{
+				"box" : 				{
 					"fontsize" : 16.0,
 					"id" : "obj-15",
 					"linecount" : 2,
 					"maxclass" : "comment",
 					"numinlets" : 1,
 					"numoutlets" : 0,
-					"patching_rect" : [ 39.0, 70.0, 172.0, 42.0 ],
+					"patching_rect" : [ 26.0, 69.0, 172.0, 42.0 ],
 					"style" : "",
 					"text" : "Generates Chebyshev coefficients."
 				}
@@ -57,9 +83,9 @@
 					"maxclass" : "comment",
 					"numinlets" : 1,
 					"numoutlets" : 0,
-					"patching_rect" : [ 39.0, 31.0, 191.0, 33.0 ],
+					"patching_rect" : [ 26.0, 31.0, 191.0, 33.0 ],
 					"style" : "",
-					"text" : "Cheb"
+					"text" : "cheb"
 				}
 
 			}
@@ -148,7 +174,7 @@
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 212.0, 120.0, 29.5, 22.0 ],
+					"patching_rect" : [ 212.0, 69.0, 29.5, 22.0 ],
 					"style" : "",
 					"text" : "low"
 				}
@@ -161,7 +187,7 @@
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 212.0, 154.0, 33.0, 22.0 ],
+					"patching_rect" : [ 212.0, 101.0, 33.0, 22.0 ],
 					"style" : "",
 					"text" : "high"
 				}
@@ -174,7 +200,7 @@
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 212.0, 187.0, 34.0, 22.0 ],
+					"patching_rect" : [ 212.0, 194.0, 34.0, 22.0 ],
 					"style" : "",
 					"text" : "print"
 				}
@@ -237,7 +263,7 @@
 					"parameter_enable" : 0,
 					"patching_rect" : [ 26.0, 291.0, 598.0, 323.0 ],
 					"setminmax" : [ -100.0, 100.0 ],
-					"size" : 21,
+					"size" : 33,
 					"style" : "",
 					"thickness" : 1
 				}
@@ -272,6 +298,24 @@
 					"disabled" : 0,
 					"hidden" : 0,
 					"source" : [ "obj-10", 0 ]
+				}
+
+			}
+, 			{
+				"patchline" : 				{
+					"destination" : [ "obj-1", 0 ],
+					"disabled" : 0,
+					"hidden" : 0,
+					"source" : [ "obj-17", 0 ]
+				}
+
+			}
+, 			{
+				"patchline" : 				{
+					"destination" : [ "obj-1", 0 ],
+					"disabled" : 0,
+					"hidden" : 0,
+					"source" : [ "obj-19", 0 ]
 				}
 
 			}
