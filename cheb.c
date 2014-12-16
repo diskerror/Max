@@ -87,16 +87,16 @@ int C74_EXPORT main(void)
 	c = class_new("cheb", (method)cheb_new, (method)cheb_free, (long)sizeof(t_cheb), 0L, A_DEFSYM, A_DEFLONG, A_DEFFLOAT, A_DEFSYM, 0);
     class_addmethod(c, (method)cheb_assist, "assist",	A_CANT, 0);  
 	
-    class_addmethod(c, (method)cheb_bang, "bang", 0);
-    class_addmethod(c, (method)cheb_low, "low", 0);
-    class_addmethod(c, (method)cheb_high, "high", 0);
-    class_addmethod(c, (method)cheb_print, "print", 0);
-    class_addmethod(c, (method)cheb_aabab, "aabab", 0);
-    class_addmethod(c, (method)cheb_aaabb, "aaabb", 0);
-    class_addmethod(c, (method)cheb_cutoff, "float", A_FLOAT, 0);	// the method for a float in the left inlet (inlet 0)
-    class_addmethod(c, (method)cheb_cutoffInt, "int", A_LONG, 0); 	// the method for a integer in the left inlet (inlet 0)
-    class_addmethod(c, (method)cheb_poles, "in1", A_DEFLONG, 0);
-    class_addmethod(c, (method)cheb_ripple, "ft2", A_DEFFLOAT, 0);  
+	class_addmethod(c, (method)cheb_bang, "bang", 0);
+	class_addmethod(c, (method)cheb_low, "low", 0);
+	class_addmethod(c, (method)cheb_high, "high", 0);
+	class_addmethod(c, (method)cheb_print, "print", 0);
+	class_addmethod(c, (method)cheb_aabab, "aabab", 0);
+	class_addmethod(c, (method)cheb_aaabb, "aaabb", 0);
+	class_addmethod(c, (method)cheb_cutoff, "float", A_FLOAT, 0);	// the method for a float in the left inlet (inlet 0)
+	class_addmethod(c, (method)cheb_cutoffInt, "int", A_LONG, 0); 	// the method for a integer in the left inlet (inlet 0)
+	class_addmethod(c, (method)cheb_poles, "in1", A_DEFLONG, 0);
+	class_addmethod(c, (method)cheb_ripple, "ft2", A_DEFFLOAT, 0);  
 	
 	class_register(CLASS_BOX, c);
 	cheb_class = c;
@@ -115,7 +115,7 @@ void *cheb_new(t_symbol *s, long argc, t_atom *argv)
 	t_cheb *x = NULL;
     
 	if ( (x = (t_cheb *)object_alloc(cheb_class)) )
-    {
+	{
 		//	create other inlets, HIGHEST TO LOWEST or RIGHT TO LEFT
 		floatin(x, 2);	//	ripple
 		intin(x, 1);	//	poles
@@ -155,7 +155,7 @@ void *cheb_new(t_symbol *s, long argc, t_atom *argv)
 		x->ripple = 0.0;
 		if( argc > 2 ) 
 		{
-            r = atom_getfloat(argv+2);
+			r = atom_getfloat(argv+2);
 			if ( r > 0.0 && r <= 29.0 )
 			{
 				x->ripple = r;
