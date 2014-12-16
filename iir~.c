@@ -17,117 +17,96 @@
 *   limitations under the License.
 */
 
-#include "ext_strings.h"
-
-void *iir_class;
-
 #include "ext.h"
+#include "ext_obex.h"
+#include "ext_strings.h"
 #include "z_dsp.h"
 #include <math.h>
 
-typedef struct _iir
+void *iir_class;
+
+typedef struct
 {
 	t_pxobject l_obj;
-	char	poles;		//	number of poles
-	char	inOrder;	//	order of coefficients
-	double	*a, *b;		//	coefficients from input list
-	double	*x, *y;		//	delayed input and output values
+	t_uint8 poles;		//	number of poles
+	t_uint8 inOrder;	//	order of coefficients
+	t_double *a, *b;	//	coefficients from input list
+	t_double *x, *y;	//	delayed input and output values
 } t_iir;
 
-void *iir_new	(t_symbol *o);
-void iir_dsp	(t_iir *iir, t_signal **sp, short *count);
+void *iir_new(t_symbol *o, long argc, t_atom *argv);
+void iir_free(t_iir *x);
+void iir_assist(t_iir *x, void *b, long m, long a, char *s);
+
+void iir_aabab(t_iir *x);
+void iir_aaabb(t_iir *x);
+void iir_print(t_iir *x);
+void iir_dsp(t_iir *x, t_signal **sp, short *count);
+void iir_dsp64(t_iir *x, t_object *dsp64, short *count, double samplerate, long maxvectorsize, long flags);
 t_int *iir_perform(t_int *w);
-void iir_clear	(t_iir *iir);
-void iir_assist	(t_iir *iir, void *b, long m, long a, char *s);
-void iir_free	(t_iir *iir);
-void iir_aabab	(t_iir *iir);
-void iir_aaabb	(t_iir *iir);
-void iir_coeffs	(t_iir *iir, t_symbol *, short argc, t_atom *argv);
-void iir_print	(t_iir *iir);
+void iir_perform64(t_iir *x, t_object *dsp64, double **ins, long numins, double **outs, long numouts, long sampleframes, long flags, void *userparam);
+void iir_clear(t_iir *x);
+void iir_coeffs(t_iir *x, t_symbol *, short argc, t_atom *argv);
+void iir_releasePtrs(t_iir *x);
 
-void iir_releasePtrs	(t_iir *iir);
-
-void main(void)
+int C74_EXPORT main(void)
 {
-	setup((t_messlist **)&iir_class, (method)iir_new, (method)dsp_free, (short)sizeof(t_iir), 0L, A_DEFSYM, 0);
-	addmess((method)iir_dsp, "dsp", A_CANT, 0);
-	addmess((method)iir_assist, "assist", A_CANT, 0);
-	addmess((method)iir_clear, "clear", 0);
-	addmess((method)iir_aabab, "aabab", 0);
-	addmess((method)iir_aaabb, "aaabb", 0);
-	addmess((method)iir_print, "print", 0);
-	addmess((method)iir_coeffs, "list", A_GIMME, 0);
-	dsp_initclass();
+	t_class *c;
+	c = class_new("iir~", (method)iir_new, (method)iir_free, sizeof(t_iir), 0L, A_DEFSYM, 0);
+	class_addmethod(c, (method)iir_assist, "assist", A_CANT, 0);
+
+	class_addmethod(c, (method)iir_dsp, "dsp", A_CANT, 0);
+	class_addmethod(c, (method)iir_dsp64, "dsp64", A_CANT, 0);
+	class_addmethod(c, (method)iir_clear, "clear", 0);
+	class_addmethod(c, (method)iir_aabab, "aabab", 0);
+	class_addmethod(c, (method)iir_aaabb, "aaabb", 0);
+	class_addmethod(c, (method)iir_print, "print", 0);
+	class_addmethod(c, (method)iir_coeffs, "list", A_GIMME, 0);
+	
+	class_dspinit(c);
+	class_register(CLASS_BOX, c);
+	
+	iir_class = c;
+	
+	return 0;
 }
 
-void *iir_new(t_symbol *o)
+void *iir_new(t_symbol *o, long argc, t_atom *argv)
 {
-	long i;
-	
-    t_iir *iir = (t_iir *)newobject(iir_class);
-    dsp_setup((t_pxobject *)iir, 1);
-	
-    // one signal outlet
-    outlet_new((t_object *)iir, "signal");
+    t_iir *x = NULL;
     
-    //	post message
-	post("iir~ [aabab|aaabb]");
+    if( (x = (t_iir *)object_alloc(iir_class)) )
+    {
+		dsp_setup((t_pxobject *)x, 1);
 	
-	//	output order
-	if ( strcmp(o->s_name, "aabab") && strcmp(o->s_name, "aaabb") && o->s_name[0] )	//	zero means match
-	{
-		post("WARNING: Must specify an input order of either \"aabab\" or \"aaabb\".");
-		post("   Setting value to \"aabab\".");
-		iir->inOrder = 0;
-	}
-	else
-	{
-		if (!strcmp(o->s_name, "aabab") || !o->s_name[0] )
-			iir->inOrder = 0;
+		// one signal outlet
+		outlet_new((t_object *)x, "signal");
+	
+		//	post message
+		post("iir~ [aabab|aaabb]");
+	
+		//	output order
+		if( argc && !strcmp(atom_getsym(argv)->s_name, "aaabb") )
+			x->inOrder = 1;
 		else
-			iir->inOrder = 1;
+			x->inOrder = 0;
+
+		//	start with all pointers == null
+		x->a = x->b = x->x = x->y = NULL;
 	}
-	
-	//	start with all pointers == null
-	iir->a = iir->b = iir->x = iir->y = NULL;
 
-    return (iir);
+    return (x);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-void iir_aabab(t_iir *iir)
+void iir_free(t_iir *x)
 {
-	iir->inOrder = 0;
+	iir_releasePtrs(x);
+	dsp_free((t_pxobject *)x);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-void iir_aaabb(t_iir *iir)
-{
-	iir->inOrder = 1;
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-void iir_print(t_iir *iir)
-{
-	long i;
-	if (iir->a)
-	{
-		post("a[00] = % .15e", iir->a[0]);
-		for ( i=1; i <= iir->poles; i++ )
-			post("a[%02d] = % .15e   b[%02d] = % .15e", i, iir->a[i], i, iir->b[i]);
-	}
-	else
-		post("a[00] = 0.0");
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-void iir_free(t_iir *iir)
-{
-	iir_releasePtrs	(iir);
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////
-void iir_assist(t_iir *iir, void *b, long m, long a, char *s)
+void iir_assist(t_iir *x, void *b, long m, long a, char *s)
 {
 	if (m == 2)
 		sprintf(s,"(signal) Output");
@@ -138,69 +117,142 @@ void iir_assist(t_iir *iir, void *b, long m, long a, char *s)
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
+void iir_aabab(t_iir *x)
+{
+	x->inOrder = 0;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+void iir_aaabb(t_iir *x)
+{
+	x->inOrder = 1;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+void iir_print(t_iir *x)
+{
+	long i;
+	if (x->a)
+	{
+		post("a[00] = % .15e", x->a[0]);
+		for ( i=1; i <= x->poles; i++ )
+			post("a[%02d] = % .15e   b[%02d] = % .15e", i, x->a[i], i, x->b[i]);
+	}
+	else
+		post("a[00] = 0.0");
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+void iir_dsp(t_iir *x, t_signal **sp, short *count)
+{
+	iir_clear(x);
+	dsp_add(iir_perform, 6, sp[0]->s_vec, sp[3]->s_vec, x, sp[1]->s_vec, sp[2]->s_vec, sp[0]->s_n);
+}
+
+
+void iir_dsp64(t_iir *x, t_object *dsp64, short *count, double samplerate, long maxvectorsize, long flags)
+{
+	iir_clear(x);
+	dsp_add64(dsp64, (t_object*)x, (t_perfroutine64)iir_perform64, 0, NULL);
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
 t_int *iir_perform(t_int *w)
 {
 	// assign from parameters
-    t_float	*in		= (t_float *) w[1];
-    t_iir	*iir	= (t_iir *) w[2];
-    t_float *out	= (t_float *) w[3];
-    long	n		= (long) w[4];
+    t_float *in = (t_float *) w[1];
+    t_float *out = (t_float *) w[2];
+    t_iir *x = (t_iir *) w[3];
+    long n = (long) w[4];
     register long p;
     
-    if (!iir->l_obj.z_disabled)
-    {
-	    // DSP loops
-	    if (iir->a && iir->b && iir->x && iir->y)
-	    {
-			while (n--)
-		    {
-		    	//	delay old values one sample
-		    	for (p=iir->poles; p>0; p--)
-		    	{
-		    		iir->x[p] = iir->x[p-1];
-		    		iir->y[p] = iir->y[p-1];
-		    	}
-		    	iir->x[0] = (double)*in++;
-		    	
-		    	iir->y[0] = iir->x[0] * iir->a[0];
-		    	for (p=1; p<=iir->poles; p++)
-		    	{
-		    		iir->y[0] += iir->x[p] * iir->a[p];
-		    		iir->y[0] += iir->y[p] * iir->b[p];
-		    	}
-		    	
-		    	*out++	= (float)iir->y[0];
-		    }
-		}
-		else	//	if pointers are no good...
+    if (x->l_obj.z_disabled)
+		return (w+5);
+	
+	// DSP loops
+	if (x->a && x->b && x->x && x->y)
+	{
+		while (n--)
 		{
-			while (n--)
-				*out++ = *in++;	//	...just copy input to output
+			//	delay old values one sample
+			for (p=x->poles; p>0; p--)
+			{
+				x->x[p] = x->x[p-1];
+				x->y[p] = x->y[p-1];
+			}
+			x->x[0] = (double)*in++;
+			
+			x->y[0] = x->x[0] * x->a[0];
+			for (p=1; p<=x->poles; p++)
+			{
+				x->y[0] += x->x[p] * x->a[p];
+				x->y[0] += x->y[p] * x->b[p];
+			}
+			
+			*out++ = (float)x->y[0];
 		}
 	}
+	else	//	if pointers are no good...
+	{
+		while (n--)
+			*out++ = *in++;	//	...just copy input to output
+	}
+	
     return (w+5);
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////////////
-//	Tell host how to insert this plugin in DSP chain.
-void iir_dsp(t_iir *iir, t_signal **sp, short *count)
-{
-	iir_clear(iir);
 
-	dsp_add(iir_perform, 4, sp[0]->s_vec, iir, sp[1]->s_vec, sp[0]->s_n);
+void iir_perform64(t_iir *x, t_object *dsp64, double **ins, long numins, double **outs, long numouts, long sampleframes, long flags, void *userparam)
+{
+    t_double *in = ins[0];
+    t_double *out = outs[0];
+    long n = sampleframes;
+    register long p;
+    
+    if (x->l_obj.z_disabled)
+		return;
+	
+	// DSP loops
+	if (x->a && x->b && x->x && x->y)
+	{
+		while (n--)
+		{
+			//	delay old values one sample
+			for (p=x->poles; p>0; p--)
+			{
+				x->x[p] = x->x[p-1];
+				x->y[p] = x->y[p-1];
+			}
+			x->x[0] = *in++;
+			
+			x->y[0] = x->x[0] * x->a[0];
+			for (p=1; p<=x->poles; p++)
+			{
+				x->y[0] += x->x[p] * x->a[p];
+				x->y[0] += x->y[p] * x->b[p];
+			}
+			
+			*out++ 	= x->y[0];
+		}
+	}
+	else	//	if pointers are no good...
+	{
+		while (n--)
+			*out++ = *in++;	//	...just copy input to output
+	}
 }
 
+
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-//	Clear output. Needed if filter blows up.
-void iir_clear(t_iir *iir)
+void iir_clear(t_iir *x)
 {
 	long p;
-	for ( p=1; p<=iir->poles; p++ )
-		iir->y[p] = 0.0;	//	y[0] is not used
+	for ( p=1; p<=x->poles; p++ )
+		x->y[p] = 0.0;	//	y[0] is not used
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-void iir_coeffs	(t_iir *iir, t_symbol *, short argc, t_atom *argv)
+void iir_coeffs	(t_iir *x, t_symbol *s, short argc, t_atom *argv)
 {
 	long i, p;
 	
@@ -208,57 +260,57 @@ void iir_coeffs	(t_iir *iir, t_symbol *, short argc, t_atom *argv)
 	{
 		if (argv[i].a_type != A_FLOAT)
 		{
-			post("WARNING: All list members must be of type float.");
+			post("WARNING: All list members must be of type float or double.");
 			return;
 		}
 	}
 	
-	iir_releasePtrs(iir);	//	does nothing if pointer are null
-	iir->poles = argc/2;	//	integer division
+	iir_releasePtrs(x);	//	does nothing if pointer are null
+	x->poles = argc/2;	//	integer division
 	
 	//	now we need pointers for our new data
-	iir->a	= (double *)getbytes((iir->poles+1) * sizeof(double));
-	iir->b	= (double *)getbytes((iir->poles+1) * sizeof(double));
-	iir->x	= (double *)getbytes((iir->poles+1) * sizeof(double));
-	iir->y	= (double *)getbytes((iir->poles+1) * sizeof(double));
+	x->a	= (double *)getbytes((x->poles+1) * sizeof(double));
+	x->b	= (double *)getbytes((x->poles+1) * sizeof(double));
+	x->x	= (double *)getbytes((x->poles+1) * sizeof(double));
+	x->y	= (double *)getbytes((x->poles+1) * sizeof(double));
 	
 	//	clear the x and y space. Make them start as silence.
-	for ( p=0; p<=iir->poles; p++ )
-		iir->x[p] = iir->y[p] = 0.0;
+	for ( p=0; p<=x->poles; p++ )
+		x->x[p] = x->y[p] = 0.0;
 
-	iir->a[0] = argv[0].a_w.w_float;	//	the first is always the same no matter the order
-	if (iir->inOrder)	//	aaabb
+	x->a[0] = argv[0].a_w.w_float;	//	the first is always the same no matter the order
+	if (x->inOrder)	//	aaabb
 	{
-		for (p=1; p<=iir->poles; p++)
+		for (p=1; p<=x->poles; p++)
 		{
-			iir->a[p] = (double)argv[p].a_w.w_float;
-			iir->b[p] = (double)argv[iir->poles+p].a_w.w_float;
+			x->a[p] = (double)argv[p].a_w.w_float;
+			x->b[p] = (double)argv[x->poles+p].a_w.w_float;
 		}
 	}
 	else				//	aabab
 	{
-		for (p=1; p<=iir->poles; p++)
+		for (p=1; p<=x->poles; p++)
 		{
-			iir->a[p] = (double)argv[p*2-1].a_w.w_float;
-			iir->b[p] = (double)argv[p*2].a_w.w_float;
+			x->a[p] = (double)argv[p*2-1].a_w.w_float;
+			x->b[p] = (double)argv[p*2].a_w.w_float;
 		}
 	}
 	
 	if (!(argc % 2))	//	if the list is short...
-		iir->b[iir->poles] = 0.0;	//	...then there's bogus data in the last b
+		x->b[x->poles] = 0.0;	//	...then there's bogus data in the last b
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-void iir_releasePtrs	(t_iir *iir)
+void iir_releasePtrs(t_iir *x)
 {
-	if (iir->a && iir->b && iir->x && iir->y)	//	all must != zero
+	if (x->a && x->b && x->x && x->y)	//	all must != zero
 	{
-		freebytes(iir->a, (iir->poles+1) * sizeof(double));
-		freebytes(iir->b, (iir->poles+1) * sizeof(double));
-		freebytes(iir->x, (iir->poles+1) * sizeof(double));
-		freebytes(iir->y, (iir->poles+1) * sizeof(double));
+		freebytes(x->a, (x->poles+1) * sizeof(double));
+		freebytes(x->b, (x->poles+1) * sizeof(double));
+		freebytes(x->x, (x->poles+1) * sizeof(double));
+		freebytes(x->y, (x->poles+1) * sizeof(double));
 		
-		iir->a = 0L; iir->b = 0L; iir->x = 0L; iir->y = 0L;
+		x->a = x->b = x->x = x->y = 0L;
 	}
 	//else
 	//	error("iir_releasePtrs; one pointer was already zero.");
