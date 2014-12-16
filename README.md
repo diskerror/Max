@@ -1,4 +1,4 @@
-MAX Plug-ins
+Cycling74 Max Externals
 ================
 
 cheb
