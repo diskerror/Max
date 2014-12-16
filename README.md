@@ -1,4 +1,4 @@
-Cycling74 Max Externals (6.1/7)
+Cycling74 Max Externals (v6.1/v7)
 ================
 
 cheb
