@@ -25,7 +25,7 @@
 
 void *iir_class;
 
-#define IIR_MAX_POLES		20
+#define IIR_MAX_POLES		255
 #define IIR_COEF_MEM_SIZE	((IIR_MAX_POLES+1) * sizeof(double))
 
 typedef struct
@@ -95,10 +95,10 @@ void *iir_new(t_symbol *o, long argc, t_atom *argv)
 			x->inOrder = 0;
 		
 		//	now we need pointers for our new data
-		x->a = (double *)getbytes(IIR_COEF_MEM_SIZE);	//	input coefs
-		x->b = (double *)getbytes(IIR_COEF_MEM_SIZE);	//	output coefs
-		x->x = (double *)getbytes(IIR_COEF_MEM_SIZE);	//	delayed input
-		x->y = (double *)getbytes(IIR_COEF_MEM_SIZE);	//	delayed output
+		x->a = (double *)sysmem_newptr(IIR_COEF_MEM_SIZE);	//	input coefs
+		x->b = (double *)sysmem_newptr(IIR_COEF_MEM_SIZE);	//	output coefs
+		x->x = (double *)sysmem_newptr(IIR_COEF_MEM_SIZE);	//	delayed input
+		x->y = (double *)sysmem_newptr(IIR_COEF_MEM_SIZE);	//	delayed output
 		
 		for ( c=0; c<=IIR_MAX_POLES; c++ )
 			x->x[c] = x->y[c] = 0.0;
@@ -115,10 +115,10 @@ void *iir_new(t_symbol *o, long argc, t_atom *argv)
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 void iir_free(t_iir *x)
 {
-	if(x->a) freebytes(x->a, IIR_COEF_MEM_SIZE);
-	if(x->b) freebytes(x->b, IIR_COEF_MEM_SIZE);
-	if(x->x) freebytes(x->x, IIR_COEF_MEM_SIZE);
-	if(x->y) freebytes(x->y, IIR_COEF_MEM_SIZE);
+	if(x->a) sysmem_freeptr(x->a);
+	if(x->b) sysmem_freeptr(x->b);
+	if(x->x) sysmem_freeptr(x->x);
+	if(x->y) sysmem_freeptr(x->y);
 	
 	dsp_free((t_pxobject *)x);
 }
@@ -274,10 +274,6 @@ void iir_coeffs	(t_iir *x, t_symbol *s, short argc, t_atom *argv)
 	
 	poles = argc/2;	//	integer division
 	
-	//	clear the x and y space. Make them start as silence.
-// 	for ( p=0; p<=poles; p++ )
-// 		x->x[p] = x->y[p] = 0.0;
-
 	x->a[0] = argv[0].a_w.w_float;	//	the first is always the same no matter the order
 	if (x->inOrder) {	//	aaabb
 		for (p=1; p<=poles && p<=IIR_MAX_POLES; p++) {

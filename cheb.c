@@ -217,7 +217,7 @@ void cheb_bang(t_cheb *x)		// x = reference to this instance of the object
 	t_atom	*list;
 	
 	//	send to outputs
-	list	= (t_atom *) getbytes((x->poles*2+1) * sizeof(t_atom));
+	list	= (t_atom *) sysmem_newptr((x->poles*2+1) * sizeof(t_atom));
 	atom_setfloat(list, x->a[0]);
 	if (x->outOrder)
 	{
@@ -238,7 +238,7 @@ void cheb_bang(t_cheb *x)		// x = reference to this instance of the object
 	
 	outlet_list(x->outlet, 0L, x->poles*2+1, list);
 	
-	freebytes(list, (x->poles*2+1) * sizeof(t_atom));
+	sysmem_freeptr(list);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -361,8 +361,8 @@ void cheb_calculate(t_cheb *x)
 	//double	a[numCoeffs], b[numCoeffs];
 	// internal use for combining stages
 	//double	ta[numCoeffs], tb[numCoeffs];
-	double	*ta	= (double *)getbytes((x->poles+3) * sizeof(double));
-	double	*tb	= (double *)getbytes((x->poles+3) * sizeof(double));
+	double	*ta	= (double *)sysmem_newptr((x->poles+3) * sizeof(double));
+	double	*tb	= (double *)sysmem_newptr((x->poles+3) * sizeof(double));
 	
 	double	K, KK;
 	double	RP, IP, M, D, X0, X1, X2, Y1, Y2;
@@ -443,8 +443,8 @@ void cheb_calculate(t_cheb *x)
 			x->b[i] = tb[i] - B1*tb[i-1] - B2*tb[i-2];
 		}
 	}
-	freebytes(ta, (x->poles+3) * sizeof(double));
-	freebytes(tb, (x->poles+3) * sizeof(double));
+	sysmem_freeptr(ta);
+	sysmem_freeptr(tb);
 		
 	// Finish combining coefficients
 	x->b[2] = 0;
@@ -482,8 +482,8 @@ void cheb_getPointers	(t_cheb *x)
 {
 	if (!x->a && !x->b)	//	all must be zero
 	{
-		x->a	= (double *)getbytes((x->poles+3) * sizeof(double));
-		x->b	= (double *)getbytes((x->poles+3) * sizeof(double));
+		x->a	= (double *)sysmem_newptr((x->poles+3) * sizeof(double));
+		x->b	= (double *)sysmem_newptr((x->poles+3) * sizeof(double));
 	}
 	else
 		error("cheb_getPointers; one pointer was not zero.");
@@ -493,8 +493,8 @@ void cheb_releasePtrs	(t_cheb *x)
 {
 	if (x->a && x->b)	//	all must != zero
 	{
-		freebytes(x->a, (x->poles+3) * sizeof(double));
-		freebytes(x->b, (x->poles+3) * sizeof(double));
+		sysmem_freeptr(x->a);
+		sysmem_freeptr(x->b);
 		
 		x->a = x->b = 0L;
 	}
