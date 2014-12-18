@@ -456,24 +456,31 @@ void cheb_calculate(t_cheb *x)
 	
 	// NORMALIZE THE GAIN
 	sa = 0.0, sb = 0.0;
-	for ( i=0; i<x->poles+1; i++ )
-	{
-		if (x->lowHIGH)
-		{
-			sa += x->a[i] * pow(-1, i);
-			sb += x->b[i] * pow(-1, i);
+	if ( x->lowHIGH ) {
+		for ( i=0; i<x->poles+1; i++ ) {
+// 			sa += x->a[i] * pow(-1, i);
+// 			sb += x->b[i] * pow(-1, i);
+			if ( i % 2 == 0 ) {
+				sa += x->a[i];
+				sb += x->b[i];
+			}
+			else {
+				sa -= x->a[i];
+				sb -= x->b[i];
+			}
 		}
-		else
-		{
+	}
+	else {
+		for ( i=0; i<x->poles+1; i++ ) {
 			sa += x->a[i];
 			sb += x->b[i];
 		}
 	}
 	
-	gain = sa / (1 - sb);
+	gain = 1 / ( sa / (1 - sb) );
 	
 	for ( i=0; i<x->poles+1; i++ )
-		x->a[i] /= gain;
+		x->a[i] *= gain;
 }
 
 ///////////////////////////////////////////////
