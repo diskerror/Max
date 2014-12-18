@@ -194,7 +194,8 @@ t_int *iir_perform(t_int *w)
 				x->x[p] = x->x[p-1];
 				x->y[p] = x->y[p-1];
 			}
-			x->x[0] = (double)*in++;
+			x->x[0] = (t_double)*in++;
+			x->y[0] = 0.0;	//	just in case -O3 optimizer need it
 			
 			y0 = x->x[0] * x->a[0];
 			for (p=1; p<=x->poles; p++) {
@@ -234,6 +235,7 @@ void iir_perform64(t_iir *x, t_object *dsp64, double **ins, long numins, double 
 				x->y[p] = x->y[p-1];
 			}
 			x->x[0] = *in++;
+			x->y[0] = 0.0;	//	just in case -O3 optimizer need it
 			
 			y0 = x->x[0] * x->a[0];
 			for (p=1; p<=x->poles; p++) {
@@ -277,14 +279,14 @@ void iir_coeffs	(t_iir *x, t_symbol *s, short argc, t_atom *argv)
 	x->a[0] = argv[0].a_w.w_float;	//	the first is always the same no matter the order
 	if (x->inOrder) {	//	aaabb
 		for (p=1; p<=poles && p<=IIR_MAX_POLES; p++) {
-			x->a[p] = (double)argv[p].a_w.w_float;
-			x->b[p] = (double)argv[poles+p].a_w.w_float;
+			x->a[p] = (t_double)argv[p].a_w.w_float;
+			x->b[p] = (t_double)argv[poles+p].a_w.w_float;
 		}
 	}
 	else {				//	aabab
 		for (p=1; p<=poles && p<=IIR_MAX_POLES; p++) {
-			x->a[p] = (double)argv[p*2-1].a_w.w_float;
-			x->b[p] = (double)argv[p*2].a_w.w_float;
+			x->a[p] = (t_double)argv[p*2-1].a_w.w_float;
+			x->b[p] = (t_double)argv[p*2].a_w.w_float;
 		}
 	}
 	
