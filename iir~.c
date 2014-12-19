@@ -1,20 +1,20 @@
 /**
 *	This will do a IIR or recursive filter based on an input list of coefficients.
 *	version 2004-09-11
-*   
-*   Copyright 2004 Reid A. Woodbury Jr.
 *	
-*   Licensed under the Apache License, Version 2.0 (the "License");
-*   you may not use this file except in compliance with the License.
-*   You may obtain a copy of the License at
-*   
-*      http://www.apache.org/licenses/LICENSE-2.0
-*   
-*   Unless required by applicable law or agreed to in writing, software
-*   distributed under the License is distributed on an "AS IS" BASIS,
-*   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-*   See the License for the specific language governing permissions and
-*   limitations under the License.
+*	Copyright 2004 Reid A. Woodbury Jr.
+*	
+*	Licensed under the Apache License, Version 2.0 (the "License");
+*	you may not use this file except in compliance with the License.
+*	You may obtain a copy of the License at
+*	
+*	   http://www.apache.org/licenses/LICENSE-2.0
+*	
+*	Unless required by applicable law or agreed to in writing, software
+*	distributed under the License is distributed on an "AS IS" BASIS,
+*	WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+*	See the License for the specific language governing permissions and
+*	limitations under the License.
 */
 
 #include "ext.h"
@@ -34,7 +34,7 @@ typedef struct
 	t_uint8 poles;			//	number of poles
 	t_uint8 inOrder;		//	order of coefficients
 	t_double a0, *a, *b;	//	coefficients from input list
-	t_double x0, *x, y0, *y;	//	delayed input and output values
+	t_double *x, *y;		//	delayed input and output values
 } t_iir;
 
 void *iir_new(t_symbol *o, long argc, t_atom *argv);
@@ -75,11 +75,11 @@ int C74_EXPORT main(void)
 
 void *iir_new(t_symbol *o, long argc, t_atom *argv)
 {
-    t_iir *x = NULL;
-    long c;
-    
-    if( (x = (t_iir *)object_alloc(iir_class)) )
-    {
+	t_iir *x = NULL;
+	long c;
+	
+	if( (x = (t_iir *)object_alloc(iir_class)) )
+	{
 		dsp_setup((t_pxobject *)x, 1);
 	
 		// one signal outlet
@@ -109,7 +109,7 @@ void *iir_new(t_symbol *o, long argc, t_atom *argv)
 		x->poles = 0.0;
 	}
 
-    return (x);
+	return (x);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -176,104 +176,103 @@ void iir_dsp64(t_iir *x, t_object *dsp64, short *count, double samplerate, long 
 t_int *iir_perform(t_int *w)
 {
 	// assign from parameters
-    t_float *in = (t_float *) w[1];
-    t_float *out = (t_float *) w[2];
-    t_iir *iir = (t_iir *) w[3];
-    long n = (long) w[4];
-    t_double y_[4];
-    register long p;
-    
-    if (iir->l_obj.z_disabled)
+	t_float *in = (t_float *) w[1];
+	t_float *out = (t_float *) w[2];
+	t_iir *iir = (t_iir *) w[3];
+	long n = (long) w[4];
+	t_double x0, y0[4];
+	register long p;
+	
+	if (iir->l_obj.z_disabled)
 		return (w+5);
 	
 	// DSP loops
 	if (iir->a && iir->b && iir->x && iir->y) {
 		while (n--) {
-			//	delay old values one sample
+			//	unrolled for "-Ofast" vector optimization
+			x0 = *in++;
+			y0[0] = x0 * iir->a0;
+			y0[1] = y0[2] = y0[3] = 0.0;
+			for (p=0; p<iir->poles; p++) {
+				y0[0] += iir->x[p] * iir->a[p];
+				y0[0] += iir->y[p] * iir->b[p];
+				p++;
+				y0[1] += iir->x[p] * iir->a[p];
+				y0[1] += iir->y[p] * iir->b[p];
+				p++;
+				y0[2] += iir->x[p] * iir->a[p];
+				y0[2] += iir->y[p] * iir->b[p];
+				p++;
+				y0[3] += iir->x[p] * iir->a[p];
+				y0[3] += iir->y[p] * iir->b[p];
+			}
+			
+			//	delay values one sample
 			for (p=iir->poles-1; p>0; p--) {
 				iir->x[p] = iir->x[p-1];
 				iir->y[p] = iir->y[p-1];
 			}
-			iir->x[0] = iir->x0;
-			iir->y[0] = iir->y0;
+			iir->x[0] = x0;
+			iir->y[0] = y0[0] + y0[1] + y0[2] + y0[3];
 			
-            //  unrolled for "-Ofast" vector optimization
-			iir->x0 = (t_double)*in++;
-			y_[1] = y_[2] = y_[3] = 0.0;
-			y_[0] = iir->x0 * iir->a0;
-			for (p=0; p<iir->poles; p++) {
-				y_[0] += iir->x[p] * iir->a[p];
-				y_[0] += iir->y[p] * iir->b[p];
-				p++;
-				y_[1] += iir->x[p] * iir->a[p];
-				y_[1] += iir->y[p] * iir->b[p];
-				p++;
-				y_[2] += iir->x[p] * iir->a[p];
-				y_[2] += iir->y[p] * iir->b[p];
-				p++;
-				y_[3] += iir->x[p] * iir->a[p];
-				y_[3] += iir->y[p] * iir->b[p];
-			}
-			
-			iir->y0 = y_[0] + y_[1] + y_[2] + y_[3];
-			*out++ = (t_float)iir->y0;
+			*out++ = (t_float)iir->y[0];
 		}
 	}
 	else {	//	if pointers are no good...
 		while (n--)
-			*out++ = *in++;	//	...just copy input to output
+			*out++ = *in++; //	...just copy input to output
 	}
 	
-    return (w+5);
+	return (w+5);
 }
 
 
 void iir_perform64(t_iir *iir, t_object *dsp64, double **ins, long numins, double **outs, long numouts, long sampleframes, long flags, void *userparam)
 {
-    t_double *in = ins[0];
-    t_double *out = outs[0];
-    long n = sampleframes;
-    t_double y_[4];
-    register long p;
-    
-    if (iir->l_obj.z_disabled)
+	t_double *in = ins[0];
+	t_double *out = outs[0];
+	long n = sampleframes;
+	t_double x0, y0[4];
+	register long p;
+	
+	if (iir->l_obj.z_disabled)
 		return;
 	
 	// DSP loops
 	if (iir->a && iir->b && iir->x && iir->y) {
 		while (n--) {
-			//	delay old values one sample
+			//	unrolled for "-Ofast" vector optimization
+			x0 = *in++;
+			y0[0] = x0 * iir->a0;
+			y0[1] = y0[2] = y0[3] = 0.0;
+			for (p=0; p<iir->poles; p++) {
+				y0[0] += iir->x[p] * iir->a[p];
+				y0[0] += iir->y[p] * iir->b[p];
+				p++;
+				y0[1] += iir->x[p] * iir->a[p];
+				y0[1] += iir->y[p] * iir->b[p];
+				p++;
+				y0[2] += iir->x[p] * iir->a[p];
+				y0[2] += iir->y[p] * iir->b[p];
+				p++;
+				y0[3] += iir->x[p] * iir->a[p];
+				y0[3] += iir->y[p] * iir->b[p];
+			}
+			
+			//	delay values one sample
 			for (p=iir->poles-1; p>0; p--) {
 				iir->x[p] = iir->x[p-1];
 				iir->y[p] = iir->y[p-1];
 			}
-			iir->x[0] = iir->x0;
-			iir->y[0] = iir->y0;
+			iir->x[0] = x0;
+			iir->y[0] = y0[0] + y0[1] + y0[2] + y0[3];
 			
-            //  unrolled for "-Ofast" vector optimization
-			iir->x0 = *in++;
-			y_[1] = y_[2] = y_[3] = 0.0;
-			y_[0] = iir->x0 * iir->a0;
-			for (p=0; p<iir->poles; p++) {
-				y_[0] += iir->x[p] * iir->a[p];
-				y_[0] += iir->y[p] * iir->b[p];
-				p++;
-				y_[1] += iir->x[p] * iir->a[p];
-				y_[1] += iir->y[p] * iir->b[p];
-				p++;
-				y_[2] += iir->x[p] * iir->a[p];
-				y_[2] += iir->y[p] * iir->b[p];
-				p++;
-				y_[3] += iir->x[p] * iir->a[p];
-				y_[3] += iir->y[p] * iir->b[p];
-			}
-			
-			*out++ = iir->y0 = y_[0] + y_[1] + y_[2] + y_[3];
+			*out++ = iir->y[0];
 		}
 	}
 	else {	//	if pointers are no good...
 		while (n--)
-			*out++ = *in++;	//	...just copy input to output
+			*out++ = *in++; //	...just copy input to output
 	}
 }
 
@@ -287,7 +286,7 @@ void iir_clear(t_iir *x)
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-void iir_coeffs	(t_iir *x, t_symbol *s, short argc, t_atom *argv)
+void iir_coeffs (t_iir *x, t_symbol *s, short argc, t_atom *argv)
 {
 	long i, p, poles;
 	
@@ -300,7 +299,7 @@ void iir_coeffs	(t_iir *x, t_symbol *s, short argc, t_atom *argv)
 		}
 	}
 	
-	poles = argc/2;	//	integer division
+	poles = argc/2; //	integer division
 	
 	x->a0 = argv[0].a_w.w_float;	//	the first is always the same no matter the order
 	if (x->inOrder) {	//	aaabb
