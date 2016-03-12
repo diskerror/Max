@@ -166,7 +166,6 @@ void iir_dsp(t_iir *x, t_signal **sp, short *count)
 	dsp_add(iir_perform, 6, sp[0]->s_vec, sp[3]->s_vec, x, sp[1]->s_vec, sp[2]->s_vec, sp[0]->s_n);
 }
 
-
 void iir_dsp64(t_iir *x, t_object *dsp64, short *count, double samplerate, long maxvectorsize, long flags)
 {
 	iir_clear(x);
@@ -223,30 +222,14 @@ void iir_perform64(t_iir *iir, t_object *dsp64, double **ins, long numins, doubl
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-inline t_double iir_dsp_loop(t_iir *iir, t_double x0)
+t_double iir_dsp_loop(t_iir *iir, t_double x0)
 {
-// 	t_double y0[4];
 	t_double y0;
 	register long p;
 	
-	//	experiments in optimizing for SSE/AVX
-// 	y0[0] = x0 * iir->a0;
-// 	y0[1] = y0[2] = y0[3] = 0.0;
 	y0 = x0 * iir->a0;
 	for (p=0; p<iir->poles; p++) {
 		y0 += iir->x[p] * iir->a[p];
-// 		y0 += iir->y[p] * iir->b[p];
-// 		y0[0] += iir->x[p] * iir->a[p];
-// 		y0[0] += iir->y[p] * iir->b[p];
-// 		p++;
-// 		y0[1] += iir->x[p] * iir->a[p];
-// 		y0[1] += iir->y[p] * iir->b[p];
-// 		p++;
-// 		y0[2] += iir->x[p] * iir->a[p];
-// 		y0[2] += iir->y[p] * iir->b[p];
-// 		p++;
-// 		y0[3] += iir->x[p] * iir->a[p];
-// 		y0[3] += iir->y[p] * iir->b[p];
 	}
 	//	separate loop for removing dependency on p changing
 	for (p=0; p<iir->poles; p++) {
@@ -259,7 +242,6 @@ inline t_double iir_dsp_loop(t_iir *iir, t_double x0)
 		iir->y[p] = iir->y[p-1];
 	}
 	iir->x[0] = x0;
-// 	iir->y[0] = y0[0] + y0[1] + y0[2] + y0[3];
 	iir->y[0] = y0;
 	
 	return iir->y[0];
