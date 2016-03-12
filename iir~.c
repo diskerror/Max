@@ -37,14 +37,14 @@ typedef struct
 	t_double *x, *y;		//	delayed input and output values
 } t_iir;
 
-void *iir_new(t_symbol *o, long argc, t_atom *argv);
+void *iir_new(t_symbol *o, long argc, const t_atom *argv);
 void iir_free(t_iir *x);
 void iir_assist(t_iir *x, void *b, long m, long a, char *s);
 
 void iir_aabab(t_iir *x);
 void iir_aaabb(t_iir *x);
 void iir_print(t_iir *x);
-void iir_dsp(t_iir *x, t_signal **sp, short *count);
+// void iir_dsp(t_iir *x, t_signal **sp, short *count);
 void iir_dsp64(t_iir *x, t_object *dsp64, short *count, double samplerate, long maxvectorsize, long flags);
 t_int *iir_perform(t_int *w);
 void iir_perform64(t_iir *iir, t_object *dsp64, double **ins, long numins, double **outs, long numouts, long sampleframes, long flags, void *userparam);
@@ -58,7 +58,7 @@ int C74_EXPORT main(void)
 	c = class_new("iir~", (method)iir_new, (method)iir_free, sizeof(t_iir), 0L, A_DEFSYM, 0);
 	class_addmethod(c, (method)iir_assist, "assist", A_CANT, 0);
 
-	class_addmethod(c, (method)iir_dsp, "dsp", A_CANT, 0);
+// 	class_addmethod(c, (method)iir_dsp, "dsp", A_CANT, 0);
 	class_addmethod(c, (method)iir_dsp64, "dsp64", A_CANT, 0);
 	class_addmethod(c, (method)iir_clear, "clear", 0);
 	class_addmethod(c, (method)iir_aabab, "aabab", 0);
@@ -74,7 +74,7 @@ int C74_EXPORT main(void)
 	return 0;
 }
 
-void *iir_new(t_symbol *o, long argc, t_atom *argv)
+void *iir_new(t_symbol *o, long argc, const t_atom *argv)
 {
 	t_iir *x = NULL;
 	long c;
@@ -87,12 +87,12 @@ void *iir_new(t_symbol *o, long argc, t_atom *argv)
 		outlet_new((t_object *)x, "signal");
 	
 		//	post message
-		object_post((t_object *)x, "iir~ [aabab|aaabb]");
+// 		object_post((t_object *)x, "iir~ [aabab|aaabb]");
 	
 		//	output order
-		if( argc && !strcmp(atom_getsym(argv)->s_name, "aaabb") )
-			x->inOrder = 1;
-		else
+// 		if( argc>0 && !strcmp(atom_getsym(argv)->s_name, "aaabb") )
+// 			x->inOrder = 1;
+// 		else
 			x->inOrder = 0;
 		
 		//	now we need pointers for our new data
@@ -160,11 +160,11 @@ void iir_print(t_iir *x)
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-void iir_dsp(t_iir *x, t_signal **sp, short *count)
-{
-	iir_clear(x);
-	dsp_add(iir_perform, 6, sp[0]->s_vec, sp[3]->s_vec, x, sp[1]->s_vec, sp[2]->s_vec, sp[0]->s_n);
-}
+// void iir_dsp(t_iir *x, t_signal **sp, short *count)
+// {
+// 	iir_clear(x);
+// 	dsp_add(iir_perform, 6, sp[0]->s_vec, sp[3]->s_vec, x, sp[1]->s_vec, sp[2]->s_vec, sp[0]->s_n);
+// }
 
 void iir_dsp64(t_iir *x, t_object *dsp64, short *count, double samplerate, long maxvectorsize, long flags)
 {

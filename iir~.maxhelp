@@ -4,7 +4,7 @@
 		"appversion" : 		{
 			"major" : 7,
 			"minor" : 0,
-			"revision" : 1,
+			"revision" : 6,
 			"architecture" : "x64",
 			"modernui" : 1
 		}
@@ -81,7 +81,7 @@
 					"maxclass" : "comment",
 					"numinlets" : 1,
 					"numoutlets" : 0,
-					"patching_rect" : [ 419.0, 38.0, 40.0, 20.0 ],
+					"patching_rect" : [ 421.0, 38.0, 40.0, 20.0 ],
 					"style" : "",
 					"text" : "ripple"
 				}
@@ -93,7 +93,7 @@
 					"maxclass" : "comment",
 					"numinlets" : 1,
 					"numoutlets" : 0,
-					"patching_rect" : [ 358.0, 38.0, 40.0, 20.0 ],
+					"patching_rect" : [ 363.0, 38.0, 40.0, 20.0 ],
 					"style" : "",
 					"text" : "poles"
 				}
@@ -108,7 +108,7 @@
 					"numoutlets" : 2,
 					"outlettype" : [ "", "bang" ],
 					"parameter_enable" : 0,
-					"patching_rect" : [ 309.0, 215.0, 50.0, 22.0 ],
+					"patching_rect" : [ 309.0, 215.0, 56.0, 22.0 ],
 					"style" : ""
 				}
 
@@ -122,7 +122,7 @@
 					"numoutlets" : 2,
 					"outlettype" : [ "", "bang" ],
 					"parameter_enable" : 0,
-					"patching_rect" : [ 368.0, 215.0, 50.0, 22.0 ],
+					"patching_rect" : [ 373.0, 215.0, 50.0, 22.0 ],
 					"style" : ""
 				}
 
@@ -136,7 +136,7 @@
 					"numoutlets" : 2,
 					"outlettype" : [ "", "bang" ],
 					"parameter_enable" : 0,
-					"patching_rect" : [ 429.0, 215.0, 50.0, 22.0 ],
+					"patching_rect" : [ 431.0, 215.0, 50.0, 22.0 ],
 					"style" : ""
 				}
 
@@ -201,7 +201,7 @@
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
 					"parameter_enable" : 0,
-					"patching_rect" : [ 429.0, 64.0, 20.0, 140.0 ],
+					"patching_rect" : [ 431.0, 64.0, 20.0, 140.0 ],
 					"size" : 29.0,
 					"style" : ""
 				}
@@ -216,7 +216,7 @@
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
 					"parameter_enable" : 0,
-					"patching_rect" : [ 368.0, 64.0, 20.0, 140.0 ],
+					"patching_rect" : [ 373.0, 64.0, 20.0, 140.0 ],
 					"size" : 20.0,
 					"style" : ""
 				}
