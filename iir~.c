@@ -37,7 +37,7 @@ typedef struct
 	t_double *x, *y;		//	delayed input and output values
 } t_iir;
 
-void *iir_new(t_symbol *o, long argc, const t_atom *argv);
+void *iir_new(t_symbol *o, short argc, const t_atom *argv);
 void iir_free(t_iir *x);
 void iir_assist(t_iir *x, void *b, long m, long a, char *s);
 
@@ -74,7 +74,7 @@ int C74_EXPORT main(void)
 	return 0;
 }
 
-void *iir_new(t_symbol *o, long argc, const t_atom *argv)
+void *iir_new(t_symbol *o, short argc, const t_atom *argv)
 {
 	t_iir *x = NULL;
 	long c;
@@ -82,17 +82,17 @@ void *iir_new(t_symbol *o, long argc, const t_atom *argv)
 	if( (x = (t_iir *)object_alloc(iir_class)) )
 	{
 		dsp_setup((t_pxobject *)x, 1);
-	
+		
 		// one signal outlet
 		outlet_new((t_object *)x, "signal");
-	
+		
 		//	post message
-// 		object_post((t_object *)x, "iir~ [aabab|aaabb]");
-	
+		object_post((t_object *)x, "iir~ [aabab|aaabb]");
+		
 		//	output order
-// 		if( argc>0 && !strcmp(atom_getsym(argv)->s_name, "aaabb") )
-// 			x->inOrder = 1;
-// 		else
+		if( argc>0 && !strcmp(atom_getsym(argv)->s_name, "aaabb") )
+			x->inOrder = 1;
+		else
 			x->inOrder = 0;
 		
 		//	now we need pointers for our new data
