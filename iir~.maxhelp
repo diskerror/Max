@@ -3,8 +3,8 @@
 		"fileversion" : 1,
 		"appversion" : 		{
 			"major" : 7,
-			"minor" : 0,
-			"revision" : 6,
+			"minor" : 2,
+			"revision" : 1,
 			"architecture" : "x64",
 			"modernui" : 1
 		}
@@ -186,7 +186,7 @@
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 251.0, 189.0, 34.0, 22.0 ],
+					"patching_rect" : [ 251.0, 273.0, 34.0, 22.0 ],
 					"style" : "",
 					"text" : "print"
 				}
@@ -212,12 +212,13 @@
 					"id" : "obj-14",
 					"maxclass" : "slider",
 					"min" : 2.0,
+					"mult" : 2.0,
 					"numinlets" : 1,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
 					"parameter_enable" : 0,
 					"patching_rect" : [ 373.0, 64.0, 20.0, 140.0 ],
-					"size" : 20.0,
+					"size" : 10.0,
 					"style" : ""
 				}
 
@@ -246,7 +247,7 @@
 					"numinlets" : 3,
 					"numoutlets" : 1,
 					"outlettype" : [ "list" ],
-					"patching_rect" : [ 293.0, 273.0, 40.0, 22.0 ],
+					"patching_rect" : [ 299.0, 273.0, 40.0, 22.0 ],
 					"style" : "",
 					"text" : "cheb"
 				}
@@ -286,7 +287,7 @@
 					"numinlets" : 2,
 					"numoutlets" : 1,
 					"outlettype" : [ "" ],
-					"patching_rect" : [ 432.0, 273.0, 37.0, 22.0 ],
+					"patching_rect" : [ 421.0, 273.0, 37.0, 22.0 ],
 					"style" : "",
 					"text" : "clear"
 				}
@@ -322,7 +323,7 @@
 					"maxclass" : "newobj",
 					"numinlets" : 1,
 					"numoutlets" : 1,
-					"outlettype" : [ "signal" ],
+					"outlettype" : [ "" ],
 					"patching_rect" : [ 328.0, 330.0, 27.0, 22.0 ],
 					"style" : "",
 					"text" : "iir~"
@@ -440,7 +441,7 @@
 			}
 , 			{
 				"patchline" : 				{
-					"destination" : [ "obj-16", 0 ],
+					"destination" : [ "obj-1", 0 ],
 					"disabled" : 0,
 					"hidden" : 0,
 					"source" : [ "obj-6", 0 ]
@@ -476,15 +477,11 @@
 			}
  ],
 		"dependency_cache" : [ 			{
-				"name" : "iir~.mxo",
-				"type" : "iLaX"
-			}
-, 			{
 				"name" : "cheb.mxo",
 				"type" : "iLaX"
 			}
  ],
-		"embedsnapshot" : 0
+		"autosave" : 0
 	}
 
 }
