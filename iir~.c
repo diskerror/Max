@@ -44,13 +44,13 @@ void iir_assist(t_iir *iir, void *b, long m, long a, char *s);
 void iir_aabab(t_iir *iir);
 void iir_aaabb(t_iir *iir);
 void iir_print(t_iir *iir);
-// void iir_dsp(t_iir *iir, t_signal **sp, short *count);
+void iir_dsp(t_iir *iir, t_signal **sp, short *count);
 void iir_dsp64(t_iir *iir, t_object *dsp64, short *count, double samplerate, long maxvectorsize, long flags);
 t_int *iir_perform(t_int *w);
 void iir_perform64(t_iir *iir, t_object *dsp64, double **ins, long numins, double **outs, long numouts, long sampleframes, long flags, void *userparam);
-inline t_double iir_dsp_loop(t_iir *iir, t_double x0);
-void iir_clear(t_iir *x);
-void iir_coeffs(t_iir *x, t_symbol *, short argc, t_atom *argv);
+inline t_double iir_apply_coeffs(t_iir *iir, t_double x0);
+void iir_clearY(t_iir *x);
+void iir_accept_coeffs(t_iir *x, t_symbol *, short argc, t_atom *argv);
 
 int C74_EXPORT main(void)
 {
@@ -58,59 +58,62 @@ int C74_EXPORT main(void)
 	iir_class = class_new("iir~", (method)iir_new, (method)iir_free, sizeof(t_iir), 0L, A_DEFSYM, 0);
 	class_addmethod(iir_class, (method)iir_assist, "assist", A_CANT, 0);
 
-// 	class_addmethod(iir_class, (method)iir_dsp, "dsp", A_CANT, 0);
+	class_addmethod(iir_class, (method)iir_dsp, "dsp", A_CANT, 0);
 	class_addmethod(iir_class, (method)iir_dsp64, "dsp64", A_CANT, 0);
-	class_addmethod(iir_class, (method)iir_clear, "clear", 0);
+	class_addmethod(iir_class, (method)iir_clearY, "clear", 0);
 	class_addmethod(iir_class, (method)iir_aabab, "aabab", 0);
 	class_addmethod(iir_class, (method)iir_aaabb, "aaabb", 0);
 	class_addmethod(iir_class, (method)iir_print, "print", 0);
-	class_addmethod(iir_class, (method)iir_coeffs, "list", A_GIMME, 0);
+	class_addmethod(iir_class, (method)iir_accept_coeffs, "list", A_GIMME, 0);
 	
 	class_dspinit(iir_class);
 	class_register(CLASS_BOX, iir_class);
-	
-// 	iir_class = c;
 	
 	return 0;
 }
 
 void *iir_new(t_symbol *o, short argc, const t_atom *argv)
 {
-	t_iir *x = NULL;
+	t_iir *iir = NULL;
 	long c;
 	
-	if( (x = (t_iir *)object_alloc(iir_class)) )
+	if( (iir = (t_iir *)object_alloc(iir_class)) )
 	{
-		dsp_setup((t_pxobject *)x, 1);
+		dsp_setup((t_pxobject *)iir, 1);
 		
-		// one signal outlet
-		outlet_new((t_object *)x, "signal");
+		//	one signal outlet
+		outlet_new((t_object *)iir, "signal");
 		
 		//	post message
-		object_post((t_object *)x, "iir~ [aabab|aaabb]");
+		object_post((t_object *)iir, "iir~ [aabab|aaabb]");
 		
 		//	output order
 		if( argc==1 && !strcmp(atom_getsym(argv)->s_name, "aaabb") )
-			x->inputOrder = 1;
+			iir->inputOrder = 1;
 		else
-			x->inputOrder = 0;
+			iir->inputOrder = 0;
 		
 		//	now we need pointers for our new data
-		x->a = (double *)sysmem_newptr(IIR_COEF_MEM_SIZE);	//	input coefs
-		x->b = (double *)sysmem_newptr(IIR_COEF_MEM_SIZE);	//	output coefs
-		x->x = (double *)sysmem_newptr(IIR_COEF_MEM_SIZE);	//	delayed input
-		x->y = (double *)sysmem_newptr(IIR_COEF_MEM_SIZE);	//	delayed output
+		iir->a = (double *)sysmem_newptr(IIR_COEF_MEM_SIZE);	//	input coefs
+		iir->b = (double *)sysmem_newptr(IIR_COEF_MEM_SIZE);	//	output coefs
+		iir->x = (double *)sysmem_newptr(IIR_COEF_MEM_SIZE);	//	delayed input
+		iir->y = (double *)sysmem_newptr(IIR_COEF_MEM_SIZE);	//	delayed output
 		
-		for ( c=0; c<=IIR_MAX_POLES; c++ )
-			x->x[c] = x->y[c] = 0.0;
+		double *xp = iir->x;
+		double *xEnd = xp + IIR_MAX_POLES;
+		double *yp = iir->y;
+		while ( xp < xEnd ) {
+			*xp++ = 0.0;
+			*yp++ = 0.0;
+		}
 		
-		if (!x->a || !x->b || !x->x || !x->y)
-			object_error((t_object *)x, "BAD INIT POINTER");
+		if (!iir->a || !iir->b || !iir->x || !iir->y)
+			object_error((t_object *)iir, "BAD INIT POINTER");
 		
-		x->poles = 0;
+		iir->poles = 0;
 	}
 
-	return (x);
+	return (iir);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
@@ -160,15 +163,15 @@ void iir_print(t_iir *iir)
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-// void iir_dsp(t_iir *iir, t_signal **sp, short *count)
-// {
-// 	iir_clear(iir);
-// 	dsp_add(iir_perform, 6, sp[0]->s_vec, sp[3]->s_vec, iir, sp[1]->s_vec, sp[2]->s_vec, sp[0]->s_n);
-// }
+void iir_dsp(t_iir *iir, t_signal **sp, short *count)
+{
+	iir_clearY(iir);
+	dsp_add(iir_perform, 6, sp[0]->s_vec, sp[3]->s_vec, iir, sp[1]->s_vec, sp[2]->s_vec, sp[0]->s_n);
+}
 
 void iir_dsp64(t_iir *iir, t_object *dsp64, short *count, double samplerate, long maxvectorsize, long flags)
 {
-	iir_clear(iir);
+	iir_clearY(iir);
 	dsp_add64(dsp64, (t_object*)iir, (t_perfroutine64)iir_perform64, 0, NULL);
 }
 
@@ -179,19 +182,19 @@ t_int *iir_perform(t_int *w)
 	t_float *in = (t_float *) w[1];
 	t_float *out = (t_float *) w[2];
 	t_iir *iir = (t_iir *) w[3];
-	long n = (long) w[4];
+	long sampleframes = (long) w[4];
 	
 	if (iir->l_obj.z_disabled)
 		return (w+5);
 	
 	// DSP loops
 	if (iir->a && iir->b && iir->x && iir->y) {
-		while (n--) {
-			*out++ = (t_float)iir_dsp_loop(iir, (t_double)*in++);
+		while (sampleframes--) {
+			*out++ = (t_float)iir_apply_coeffs(iir, (t_double)*in++);
 		}
 	}
 	else {	//	if pointers are no good...
-		while (n--)
+		while (sampleframes--)
 			*out++ = *in++; //	...just copy input to output
 	}
 	
@@ -203,26 +206,25 @@ void iir_perform64(t_iir *iir, t_object *dsp64, double **ins, long numins, doubl
 {
 	t_double *in = ins[0];
 	t_double *out = outs[0];
-	long n = sampleframes;
 	
 	if (iir->l_obj.z_disabled)
 		return;
 	
 	// DSP loops
 	if (iir->a && iir->b && iir->x && iir->y) {
-		while (n--) {
-			*out++ = iir_dsp_loop(iir, *in++);
+		while (sampleframes--) {
+			*out++ = iir_apply_coeffs(iir, *in++);
 		}
 	}
 	else {	//	if pointers are no good...
-		while (n--)
+		while (sampleframes--)
 			*out++ = *in++; //	...just copy input to output
 	}
 }
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-t_double iir_dsp_loop(t_iir *iir, t_double x0)
+t_double iir_apply_coeffs(t_iir *iir, t_double x0)
 {
 	double y0 = (double)x0 * iir->a0;
 // 	register long p;
@@ -264,49 +266,58 @@ t_double iir_dsp_loop(t_iir *iir, t_double x0)
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-void iir_clear(t_iir *x)
+void iir_clearY(t_iir *iir)
 {
-	long c;
-	for ( c=0; c<=IIR_MAX_POLES; c++ )
-		x->y[c] = 0.0;
+	double *yp = iir->y;
+	double *yEnd = yp + IIR_MAX_POLES;
+	while ( yp < yEnd ) {
+		*yp++ = 0.0;
+	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-void iir_coeffs (t_iir *x, t_symbol *s, short argc, t_atom *argv)
+void iir_accept_coeffs (t_iir *iir, t_symbol *s, short argc, t_atom *argv)
 {
-	long i, p, poles;
+	unsigned short i, p, poles;
 	
 	for(i=0; i<argc; i++) {
 		if (argv[i].a_type != A_FLOAT) {
-			object_post((t_object *)x, "WARNING: All list members must be of type float or double.");
-			x->a0 = 1.0;
-			x->poles = 0.0;
+			object_post((t_object *)iir, "WARNING: All list members must be of type float or double.");
+			iir->a0 = 1.0;
+			iir->poles = 0;
 			return;
 		}
 	}
 	
-	poles = argc/2; //	integer division
+	poles = argc/2; //	integer division, floor
 	
-	x->a0 = argv[0].a_w.w_float;	//	the first is always the same no matter the order
-	if (x->inputOrder) {	//	aaabb
+	iir->a0 = argv[0].a_w.w_float;	//	the first is always the same no matter the order
+	if (iir->inputOrder) {	//	aaabb
 		for (p=1; p<=poles && p<=IIR_MAX_POLES; p++) {
-			x->a[p-1] = (double)argv[p].a_w.w_float;
-			x->b[p-1] = (double)argv[poles+p].a_w.w_float;
+			iir->a[p-1] = (double)argv[p].a_w.w_float;
+			iir->b[p-1] = (double)argv[poles+p].a_w.w_float;
 		}
 	}
 	else {					//	aabab
 		for (p=1; p<=poles && p<=IIR_MAX_POLES; p++) {
-			x->a[p-1] = (double)argv[p*2-1].a_w.w_float;
-			x->b[p-1] = (double)argv[p*2].a_w.w_float;
+			iir->a[p-1] = (double)argv[p*2-1].a_w.w_float;
+			iir->b[p-1] = (double)argv[p*2].a_w.w_float;
 		}
 	}
 	
-	if ( poles > IIR_MAX_POLES )
-		x->poles = IIR_MAX_POLES;
-	else {
-		x->poles = poles;
-		for (p=poles; p<IIR_MAX_POLES; p++) {
-			x->a[p] = x->b[p] = 0.0;
+	if ( poles != iir->poles ) {
+		if ( poles >= IIR_MAX_POLES ) {
+			iir->poles = IIR_MAX_POLES;
+		}
+		else {
+			double* ap = iir->a + poles;
+			double* aEnd = iir->a + IIR_MAX_POLES;
+			double* bp = iir->b + poles;
+			while ( ap < aEnd ) {
+				*ap++ = 0.0;
+				*bp++ = 0.0;
+			}
+			iir->poles = poles;
 		}
 	}
 }
