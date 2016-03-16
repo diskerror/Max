@@ -310,13 +310,16 @@ void iir_accept_coeffs (t_iir *iir, t_symbol *s, short argc, t_atom *argv)
 			iir->poles = IIR_MAX_POLES;
 		}
 		else {
-			double* ap = iir->a + poles;
-			double* aEnd = iir->a + IIR_MAX_POLES;
-			double* bp = iir->b + poles;
-			while ( ap < aEnd ) {
-				*ap++ = 0.0;
-				*bp++ = 0.0;
+			if ( poles < iir->poles ) {
+				double* ap = iir->a + poles;
+				double* aEnd = iir->a + iir->poles;
+				double* bp = iir->b + poles;
+				while ( ap < aEnd ) {
+					*ap++ = 0.0;
+					*bp++ = 0.0;
+				}
 			}
+			
 			iir->poles = poles;
 		}
 	}
