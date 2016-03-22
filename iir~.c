@@ -28,13 +28,20 @@ void *iir_class;
 #define IIR_MAX_POLES		64
 #define IIR_COEF_MEM_SIZE	( IIR_MAX_POLES * sizeof(double) )
 
+//	10 millisecond ramp time
+#define IIR_RAMP_SECONDS	0.01
+
 typedef struct
 {
 	t_pxobject l_obj;
-	unsigned char poles;		//	number of poles
-	unsigned char inputOrder;	//	order of coefficients
-	double a0, *a, *b;			//	coefficients from input list
-	double *x, *y;				//	delayed input and output values
+	unsigned char poles;				//	number of poles
+	unsigned char inputOrder;			//	order of coefficients
+	double a0, *a, *b;					//	coefficients to apply to stream
+	double aTarget0, *aTarget, *bTarget;//	target coefficients if ramp time is greater than zero
+	double aDiff0, *aDiff, *bDiff;		//	difference between original and target
+	double *x, *y;						//	delayed input and output values
+	unsigned long rampSteps;			//	total number of steps to perform ramp
+	long rampCountdown;					//	position in crossfade between last and current corfficients, -1 ends count
 } t_iir;
 
 void *iir_new(t_symbol *o, short argc, const t_atom *argv);
@@ -51,10 +58,10 @@ void iir_perform64(t_iir *iir, t_object *dsp64, double **ins, long numins, doubl
 inline t_double iir_apply_coeffs(t_iir *iir, t_double x0);
 void iir_clearY(t_iir *x);
 void iir_accept_coeffs(t_iir *x, t_symbol *, short argc, t_atom *argv);
+void iir_clear_all_coeffs(t_iir *iir);
 
 int C74_EXPORT main(void)
 {
-// 	t_class *c;
 	iir_class = class_new("iir~", (method)iir_new, (method)iir_free, sizeof(t_iir), 0L, A_DEFSYM, 0);
 	class_addmethod(iir_class, (method)iir_assist, "assist", A_CANT, 0);
 
@@ -75,7 +82,6 @@ int C74_EXPORT main(void)
 void *iir_new(t_symbol *o, short argc, const t_atom *argv)
 {
 	t_iir *iir = NULL;
-	long c;
 	
 	if( (iir = (t_iir *)object_alloc(iir_class)) )
 	{
@@ -93,12 +99,27 @@ void *iir_new(t_symbol *o, short argc, const t_atom *argv)
 		else
 			iir->inputOrder = 0;
 		
-		//	now we need pointers for our new data
-		iir->a = (double *)sysmem_newptr(IIR_COEF_MEM_SIZE);	//	input coefs
-		iir->b = (double *)sysmem_newptr(IIR_COEF_MEM_SIZE);	//	output coefs
-		iir->x = (double *)sysmem_newptr(IIR_COEF_MEM_SIZE);	//	delayed input
-		iir->y = (double *)sysmem_newptr(IIR_COEF_MEM_SIZE);	//	delayed output
+		iir->poles = 0;
+
+		iir->rampSteps = 1;
+		iir->rampCountdown = -1;
 		
+		//	now we need pointers for our new data
+		iir->a = (double *)sysmem_newptr(IIR_COEF_MEM_SIZE);
+		iir->b = (double *)sysmem_newptr(IIR_COEF_MEM_SIZE);
+		iir->aTarget = (double *)sysmem_newptr(IIR_COEF_MEM_SIZE);
+		iir->bTarget = (double *)sysmem_newptr(IIR_COEF_MEM_SIZE);
+		iir->aDiff = (double *)sysmem_newptr(IIR_COEF_MEM_SIZE);
+		iir->bDiff = (double *)sysmem_newptr(IIR_COEF_MEM_SIZE);
+		iir->x = (double *)sysmem_newptr(IIR_COEF_MEM_SIZE);
+		iir->y = (double *)sysmem_newptr(IIR_COEF_MEM_SIZE);
+		
+		if (!iir->a || !iir->b || !iir->aDiff || !iir->bDiff || !iir->aTarget || !iir->bTarget || !iir->x || !iir->y)
+			object_error((t_object *)iir, "BAD INIT POINTER");
+		
+		iir_clear_all_coeffs(iir);
+		
+		//	set delayed output to silence
 		double *xp = iir->x;
 		double *xEnd = xp + IIR_MAX_POLES;
 		double *yp = iir->y;
@@ -106,11 +127,6 @@ void *iir_new(t_symbol *o, short argc, const t_atom *argv)
 			*xp++ = 0.0;
 			*yp++ = 0.0;
 		}
-		
-		if (!iir->a || !iir->b || !iir->x || !iir->y)
-			object_error((t_object *)iir, "BAD INIT POINTER");
-		
-		iir->poles = 0;
 	}
 
 	return (iir);
@@ -121,6 +137,10 @@ void iir_free(t_iir *iir)
 {
 	if(iir->a) sysmem_freeptr(iir->a);
 	if(iir->b) sysmem_freeptr(iir->b);
+	if(iir->aTarget) sysmem_freeptr(iir->aTarget);
+	if(iir->bTarget) sysmem_freeptr(iir->bTarget);
+	if(iir->aDiff) sysmem_freeptr(iir->aDiff);
+	if(iir->bDiff) sysmem_freeptr(iir->bDiff);
 	if(iir->x) sysmem_freeptr(iir->x);
 	if(iir->y) sysmem_freeptr(iir->y);
 	
@@ -226,21 +246,43 @@ void iir_perform64(t_iir *iir, t_object *dsp64, double **ins, long numins, doubl
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 t_double iir_apply_coeffs(t_iir *iir, t_double x0)
 {
-	double y0 = (double)x0 * iir->a0;
-// 	register long p;
-// 	
-// 	for (p=0; p<iir->poles; p++) {
-// 		y0 += iir->x[p] * iir->a[p];
-// 		y0 += iir->y[p] * iir->b[p];
-// 	}
+	double rampDivisor = 0.0;
+	
+	if ( iir->rampCountdown ) {
+		rampDivisor = (double)iir->rampCountdown / (double) iir->rampSteps;
+		iir->a0 = (rampDivisor * iir->aDiff0 ) + iir->aTarget0;
+	}
+	else if ( iir->rampCountdown == 0 ) {
+		iir->a0 = iir->aTarget0;	//	do we really need this special case?
+	}
+	
+	double y0 = x0 * iir->a0;
+
 	double* xEnd = iir->x + iir->poles;
 	double* xp = iir->x;
 	double* ap = iir->a;
+	double* aTp = iir->aTarget;
+	double* aDp = iir->aDiff;
 	double* yp = iir->y;
 	double* bp = iir->b;
+	double* bTp = iir->bTarget;
+	double* bDp = iir->bDiff;
 	while ( xp < xEnd ) {
+		if ( iir->rampCountdown ) {
+			*ap = (rampDivisor * *aDp++) + *aTp++;
+			*bp = (rampDivisor * *bDp++) + *bTp++;
+		}
+		else if ( iir->rampCountdown == 0 ) {
+			*ap = *aTp++;
+			*bp = *bTp++;
+		}
+		
 		y0 += *xp++ * *ap++;
 		y0 += *yp++ * *bp++;
+	}
+	
+	if ( iir->rampCountdown > -1 ) {
+		iir->rampCountdown--;
 	}
 	
 	//	delay values one sample
@@ -278,30 +320,56 @@ void iir_clearY(t_iir *iir)
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 void iir_accept_coeffs (t_iir *iir, t_symbol *s, short argc, t_atom *argv)
 {
-	unsigned short i, p, poles;
+	unsigned long i, p, poles;
 	
 	for(i=0; i<argc; i++) {
+		//	Don't worry about ramping if coeff list is bad.
 		if (argv[i].a_type != A_FLOAT) {
 			object_post((t_object *)iir, "WARNING: All list members must be of type float or double.");
-			iir->a0 = 1.0;
 			iir->poles = 0;
+			iir->rampCountdown = 0;
+			iir_clear_all_coeffs(iir);
 			return;
 		}
 	}
 	
 	poles = argc/2; //	integer division, floor
 	
-	iir->a0 = argv[0].a_w.w_float;	//	the first is always the same no matter the order
+	//	Copy items in the input list to their proper locations.
+// 	iir->a0 = argv[0].a_w.w_float;	//	the first is always the same no matter the order
+// 	if (iir->inputOrder) {	//	aaabb
+// 		for (p=1; p<=poles && p<=IIR_MAX_POLES; p++) {
+// 			iir->a[p-1] = (double)argv[p].a_w.w_float;
+// 			iir->b[p-1] = (double)argv[poles+p].a_w.w_float;
+// 		}
+// 	}
+// 	else {					//	aabab
+// 		for (p=1; p<=poles && p<=IIR_MAX_POLES; p++) {
+// 			iir->a[p-1] = (double)argv[p*2-1].a_w.w_float;
+// 			iir->b[p-1] = (double)argv[p*2].a_w.w_float;
+// 		}
+// 	}
+	
+	iir->rampSteps = sys_getsr() * IIR_RAMP_SECONDS;
+	iir->rampCountdown = iir->rampSteps - 1;
+	
+	//	Copy items in the input list to their proper locations.
+	iir->aTarget0 = argv[0].a_w.w_float;	//	the first is always the same no matter the order
+	iir->aDiff0 = iir->a0 - iir->aTarget0;
 	if (iir->inputOrder) {	//	aaabb
 		for (p=1; p<=poles && p<=IIR_MAX_POLES; p++) {
-			iir->a[p-1] = (double)argv[p].a_w.w_float;
-			iir->b[p-1] = (double)argv[poles+p].a_w.w_float;
+			iir->aTarget[p-1] = (double)argv[p].a_w.w_float;
+			iir->bTarget[p-1] = (double)argv[poles+p].a_w.w_float;
+			iir->aDiff[p-1] = iir->a[p-1] - iir->aTarget[p-1];
+			iir->bDiff[p-1] = iir->b[p-1] - iir->bTarget[p-1];
 		}
 	}
 	else {					//	aabab
 		for (p=1; p<=poles && p<=IIR_MAX_POLES; p++) {
-			iir->a[p-1] = (double)argv[p*2-1].a_w.w_float;
-			iir->b[p-1] = (double)argv[p*2].a_w.w_float;
+			iir->aTarget[p-1] = (double)argv[p*2-1].a_w.w_float;
+			iir->bTarget[p-1] = (double)argv[p*2].a_w.w_float;
+			iir->aDiff[p-1] = iir->a[p-1] - iir->aTarget[p-1];
+			iir->bDiff[p-1] = iir->b[p-1] - iir->bTarget[p-1];
 		}
 	}
 	
@@ -322,5 +390,18 @@ void iir_accept_coeffs (t_iir *iir, t_symbol *s, short argc, t_atom *argv)
 			
 			iir->poles = poles;
 		}
+	}
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+void iir_clear_all_coeffs(t_iir *iir)
+{
+	//	"1.0" == pass data unchanged
+	//	"0.0" == silence
+	//	"0.1" == reduce overall by 20dB
+	iir->a0 = iir->aDiff0 = iir->aTarget0 = 0.0;
+	
+	for ( unsigned long p=0; p<IIR_MAX_POLES; p++ ) {
+		iir->a[p] = iir->b[p] = iir->aTarget[p] = iir->bTarget[p] = iir->aDiff[p] = iir->bDiff[p] = 0.0;
 	}
 }

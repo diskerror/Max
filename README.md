@@ -8,6 +8,8 @@ This is an implementation of the algorithm presented by [Stephen W. Smith in his
 ##iir~
 This will do a IIR or recursive convolution based on an input list of float or double precision coefficients. Coefficients can be in one of two orders, either "aabab…" or "aaa…bb…". Handles both 32- and 64-bit MSP streams.
 
+This version includes my first attempt to remove the “zipper” effect. This has made algorithm more unstable at the extremes of frequency. Future versions will have a settable ramp time.
+
 #XCode Project Setup
 ```
 https://cycling74.com/forums/topic/writing-external-xcode-6-empty-project/
